@@ -3,6 +3,7 @@ package com.valyalkin.hlbudget.error
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.ConstraintViolationException
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessResourceFailureException
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.http.HttpStatus
@@ -11,6 +12,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.authentication.AnonymousAuthenticationToken
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.transaction.CannotCreateTransactionException
 import org.springframework.web.HttpMediaTypeNotAcceptableException
 import org.springframework.web.HttpMediaTypeNotSupportedException
 import org.springframework.web.HttpRequestMethodNotSupportedException
@@ -60,6 +62,19 @@ class GlobalExceptionHandler(
     ): ProblemDetail {
         logServerFailure(exception.status, exception.details, exception, request)
         return problems.serverError(exception.status, request)
+    }
+
+    /**
+     * The database is unreachable (connection refused, pool timeout, no transaction possible).
+     * CannotGetJdbcConnectionException is a DataAccessResourceFailureException, so it lands here.
+     */
+    @ExceptionHandler(DataAccessResourceFailureException::class, CannotCreateTransactionException::class)
+    fun handleDatabaseUnavailable(
+        exception: Exception,
+        request: HttpServletRequest,
+    ): ProblemDetail {
+        logServerFailure(HttpStatus.SERVICE_UNAVAILABLE, emptyMap(), exception, request)
+        return problems.serverError(HttpStatus.SERVICE_UNAVAILABLE, request)
     }
 
     // ------------------------------------------------------------------------ request validation

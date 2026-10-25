@@ -19,7 +19,8 @@ class SecurityIT : AbstractIntegrationTest() {
     @ParameterizedTest(name = "{0}")
     @MethodSource("rejectedTokens")
     fun `an unusable token is a 401 problem and writes nothing`(
-        case: String,
+        // Only names the case in the test report ({0}).
+        @Suppress("UnusedParameter") case: String,
         token: String?,
     ) {
         var requestId: String? = null

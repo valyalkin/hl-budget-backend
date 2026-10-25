@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ProblemDetail
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.jdbc.CannotGetJdbcConnectionException
 import org.springframework.mock.http.MockHttpInputMessage
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.security.access.AccessDeniedException
@@ -20,6 +21,7 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken
 import org.springframework.security.authentication.TestingAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.transaction.CannotCreateTransactionException
 import org.springframework.web.HttpMediaTypeNotAcceptableException
 import org.springframework.web.HttpMediaTypeNotSupportedException
 import org.springframework.web.HttpRequestMethodNotSupportedException
@@ -176,5 +178,19 @@ class GlobalExceptionHandlerTest {
         assertThat(listOf(methods.status, media.status, accept.status)).containsExactly(405, 415, 406)
         assertThat(methods.detail).doesNotContain("null")
         assertThat(media.type.toString()).isEqualTo("urn:problem:hl-budget:bad-request")
+    }
+
+    @Test
+    fun `an unreachable database is a 503 with the fixed detail`() {
+        listOf(
+            CannotGetJdbcConnectionException("refused db:5432"),
+            CannotCreateTransactionException("could not open connection"),
+        ).forEach { exception ->
+            val problem = handler.handleDatabaseUnavailable(exception, request)
+
+            assertThat(problem.status).isEqualTo(503)
+            assertThat(problem.type.toString()).isEqualTo("urn:problem:hl-budget:service-unavailable")
+            assertThat(problem.detail).isEqualTo("The service is temporarily unavailable")
+        }
     }
 }
