@@ -72,3 +72,9 @@ class UnprocessableEntityException(
     details: Map<String, Any> = emptyMap(),
     cause: Throwable? = null,
 ) : BusinessException(HttpStatus.UNPROCESSABLE_ENTITY, message, details, cause)
+
+/** The caller's credentials are not usable. 401, rendered as `unauthenticated`. */
+class UnauthenticatedException(
+    message: String,
+    details: Map<String, Any> = emptyMap(),
+) : BusinessException(HttpStatus.UNAUTHORIZED, message, details)

@@ -2,16 +2,9 @@ package com.valyalkin.hlbudget.config
 
 import com.valyalkin.hlbudget.error.ProblemCodes
 import com.valyalkin.hlbudget.error.ProblemDetailFactory
-import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
-import io.swagger.v3.oas.models.media.ArraySchema
-import io.swagger.v3.oas.models.media.IntegerSchema
-import io.swagger.v3.oas.models.media.ObjectSchema
-import io.swagger.v3.oas.models.media.Schema
-import io.swagger.v3.oas.models.media.StringSchema
 import io.swagger.v3.oas.models.security.SecurityRequirement
-import io.swagger.v3.oas.models.security.SecurityScheme
 import io.swagger.v3.oas.models.servers.Server
 import io.swagger.v3.oas.models.tags.Tag
 import org.springframework.context.annotation.Bean
@@ -38,63 +31,12 @@ class OpenApiConfig {
                 listOf(
                     Tag().name(TAG_USERS).description("The signed-in user's own record"),
                     Tag()
-                        .name(
-                            TAG_OPERATIONS,
-                        ).description("Unversioned probes for the platform (not routed through the ingress)"),
+                        .name(TAG_OPERATIONS)
+                        .description("Unversioned probes for the platform (not routed through the ingress)"),
                 ),
-            ).components(
-                Components()
-                    .addSecuritySchemes(
-                        BEARER_SCHEME,
-                        SecurityScheme()
-                            .type(SecurityScheme.Type.HTTP)
-                            .scheme("bearer")
-                            .bearerFormat("JWT")
-                            .description(
-                                "Auth0 access token (RS256) for the HL Budget API audience. Validated for " +
-                                    "signature, issuer, audience and expiry on every request.",
-                            ),
-                    ).addSchemas(PROBLEM_SCHEMA, problemSchema())
-                    .addSchemas(FIELD_VIOLATION_SCHEMA, fieldViolationSchema()),
-            ).addSecurityItem(SecurityRequirement().addList(BEARER_SCHEME))
-
-    private fun problemSchema(): Schema<Any> =
-        ObjectSchema()
-            .description("RFC 9457 problem details, as produced by the backend's single error handler")
-            .addProperty(
-                "type",
-                StringSchema()
-                    .description("Stable URN naming the error category")
-                    .apply { enum = PROBLEM_TYPES },
-            ).addProperty("title", StringSchema())
-            .addProperty(
-                "status",
-                IntegerSchema().minimum(MIN_STATUS.toBigDecimal()).maximum(MAX_STATUS.toBigDecimal()),
-            ).addProperty(
-                "detail",
-                StringSchema().description("Human-readable explanation. For 5xx always a fixed, safe sentence"),
-            ).addProperty("instance", StringSchema().description("Request path"))
-            .addProperty("timestamp", StringSchema().format("date-time"))
-            .addProperty("traceId", StringSchema())
-            .addProperty(
-                "details",
-                ObjectSchema()
-                    .description("Structured, scalar-only context; `reason` when a client must branch")
-                    .additionalProperties(true),
-            ).addProperty(
-                "errors",
-                ArraySchema()
-                    .description("One entry per offending field (validation failures only)")
-                    .items(Schema<Any>().`$ref`("#/components/schemas/$FIELD_VIOLATION_SCHEMA")),
-            ).apply { required = listOf("type", "title", "status", "instance", "timestamp", "traceId") }
-
-    private fun fieldViolationSchema(): Schema<Any> =
-        ObjectSchema()
-            .addProperty("pointer", StringSchema().example("#/name"))
-            .addProperty("field", StringSchema().example("name"))
-            .addProperty("code", StringSchema().example("NotBlank"))
-            .addProperty("message", StringSchema().example("must not be blank"))
-            .apply { required = listOf("pointer", "field", "code", "message") }
+            ).components(OpenApiComponents.components())
+            .paths(OpenApiProbes.probePaths())
+            .addSecurityItem(SecurityRequirement().addList(BEARER_SCHEME))
 
     companion object {
         const val BEARER_SCHEME = "bearerAuth"
@@ -102,10 +44,11 @@ class OpenApiConfig {
         const val TAG_OPERATIONS = "Operations"
         const val PROBLEM_SCHEMA = "Problem"
         const val FIELD_VIOLATION_SCHEMA = "FieldViolation"
-        private const val MIN_STATUS = 400
-        private const val MAX_STATUS = 599
+        const val HEALTH_SCHEMA = "HealthStatus"
+        const val REQUEST_ID_HEADER = "X-Request-Id"
+        const val REQUEST_ID_HEADER_REF = "#/components/headers/X-Request-Id"
 
-        private val PROBLEM_TYPES =
+        internal val PROBLEM_TYPES =
             listOf(
                 ProblemCodes.UNAUTHENTICATED,
                 ProblemCodes.ACCESS_DENIED,

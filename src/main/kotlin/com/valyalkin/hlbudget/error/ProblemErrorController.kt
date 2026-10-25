@@ -1,5 +1,6 @@
 package com.valyalkin.hlbudget.error
 
+import io.swagger.v3.oas.annotations.Hidden
 import jakarta.servlet.RequestDispatcher
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
@@ -17,6 +18,7 @@ import org.springframework.web.context.request.ServletWebRequest
  * Container error dispatches (a failure in a filter, say) never reach an @ExceptionHandler.
  * Replacing Boot's BasicErrorController keeps even those responses problem+json.
  */
+@Hidden
 @RestController
 class ProblemErrorController(
     private val problems: ProblemDetailFactory,
