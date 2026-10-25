@@ -45,6 +45,27 @@ hlbudget:
     jwk-set-uri: ${HLBUDGET_AUTH_JWKSETURI}
     claims-namespace: ${HLBUDGET_AUTH_CLAIMSNAMESPACE}
 
+# Probes on the main port at the homelab paths (research R-008). Liveness checks nothing;
+# readiness fails while Postgres is unreachable. No details or components are disclosed.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      show-components: never
+      group:
+        liveness:
+          include: livenessState
+          additional-path: server:/healthz
+        readiness:
+          include: readinessState,db
+          additional-path: server:/readyz
+
 springdoc:
   api-docs:
     path: /api/v3/api-docs
