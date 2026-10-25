@@ -15,6 +15,11 @@ spring:
     hikari:
       connection-timeout: 2000
       validation-timeout: 1000
+      data-source-properties:
+        # pgjdbc waits forever on a database that stops answering (as opposed to refusing),
+        # which would hang /readyz and every request. Seconds; matches the web app's API timeout.
+        connectTimeout: 2
+        socketTimeout: 5
   jpa:
     hibernate:
       # Flyway owns the schema.
