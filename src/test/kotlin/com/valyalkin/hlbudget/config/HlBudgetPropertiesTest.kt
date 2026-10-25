@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.context.annotation.Configuration
 
@@ -65,5 +66,37 @@ class HlBudgetPropertiesTest {
         assertThat(
             failureText(complete + (key to " ")),
         ).contains("hlbudget.auth.${camel(key)}").contains("must not be blank")
+    }
+
+    /**
+     * The real application.yaml, fed the deployment's env var names. An unset variable must fail
+     * startup: Boot leaves an unresolvable placeholder as literal text, which would otherwise pass
+     * @NotBlank and make the service reject every token instead of refusing to start.
+     */
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "HLBUDGET_AUTH_ISSUER",
+            "HLBUDGET_AUTH_AUDIENCE",
+            "HLBUDGET_AUTH_JWKSETURI",
+            "HLBUDGET_AUTH_CLAIMSNAMESPACE",
+        ],
+    )
+    fun `an unset environment variable fails startup through application yaml`(variable: String) {
+        val env =
+            mapOf(
+                "HLBUDGET_AUTH_ISSUER" to "https://t.example/",
+                "HLBUDGET_AUTH_AUDIENCE" to "https://api.example",
+                "HLBUDGET_AUTH_JWKSETURI" to "https://t.example/.well-known/jwks.json",
+                "HLBUDGET_AUTH_CLAIMSNAMESPACE" to "https://hl-budget/",
+            ) - variable
+        ApplicationContextRunner()
+            .withInitializer(ConfigDataApplicationContextInitializer())
+            .withUserConfiguration(Props::class.java)
+            .withPropertyValues(*env.map { (key, value) -> "$key=$value" }.toTypedArray())
+            .run { context ->
+                assertThat(context).hasFailed()
+                assertThat(context.startupFailure).rootCause().hasMessageContaining("must not be blank")
+            }
     }
 }

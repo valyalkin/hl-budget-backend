@@ -42,13 +42,14 @@ server:
     whitelabel:
       enabled: false
 
-# Required, no defaults: a missing value fails startup naming the variable.
+# Required. The empty default is deliberate: Boot keeps an unresolvable placeholder as literal
+# text, which would pass validation. Empty fails @NotBlank at startup, naming the property.
 hlbudget:
   auth:
-    issuer: ${HLBUDGET_AUTH_ISSUER}
-    audience: ${HLBUDGET_AUTH_AUDIENCE}
-    jwk-set-uri: ${HLBUDGET_AUTH_JWKSETURI}
-    claims-namespace: ${HLBUDGET_AUTH_CLAIMSNAMESPACE}
+    issuer: ${HLBUDGET_AUTH_ISSUER:}
+    audience: ${HLBUDGET_AUTH_AUDIENCE:}
+    jwk-set-uri: ${HLBUDGET_AUTH_JWKSETURI:}
+    claims-namespace: ${HLBUDGET_AUTH_CLAIMSNAMESPACE:}
 
 # Probes on the main port at the homelab paths (research R-008). Liveness checks nothing;
 # readiness fails while Postgres is unreachable. No details or components are disclosed.
