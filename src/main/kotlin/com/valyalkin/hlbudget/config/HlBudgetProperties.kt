@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
 
 /**
- * Typed, validated configuration. A missing or blank value fails startup naming the property.
+ * Typed, validated configuration. A missing or blank value fails startup naming the property:
+ * the empty defaults exist only so a missing value reaches @NotBlank instead of a null check.
  * Bound from HLBUDGET_AUTH_ISSUER, HLBUDGET_AUTH_AUDIENCE, HLBUDGET_AUTH_JWKSETURI and
  * HLBUDGET_AUTH_CLAIMSNAMESPACE.
  */
@@ -17,12 +18,12 @@ data class HlBudgetProperties(
 ) {
     data class Auth(
         /** Expected `iss`, with Auth0's trailing slash. */
-        @field:NotBlank val issuer: String,
+        @field:NotBlank val issuer: String = "",
         /** Expected `aud`: the HL Budget API identifier. */
-        @field:NotBlank val audience: String,
+        @field:NotBlank val audience: String = "",
         /** Auth0's JWKS endpoint, fetched lazily on the first token. */
-        @field:NotBlank val jwkSetUri: String,
+        @field:NotBlank val jwkSetUri: String = "",
         /** Prefix of the profile claims the Post-Login Action adds, e.g. `https://hl-budget/`. */
-        @field:NotBlank val claimsNamespace: String,
+        @field:NotBlank val claimsNamespace: String = "",
     )
 }
