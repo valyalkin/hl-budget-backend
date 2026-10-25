@@ -1,0 +1,17 @@
+.git
+.github
+.gradle
+.kotlin
+.idea
+build
+contracts
+auth0
+compose.yaml
+Dockerfile
+.dockerignore
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.DS_Store

@@ -153,3 +153,8 @@ kover {
 tasks.named("check") {
     dependsOn(tasks.named("koverVerify"))
 }
+
+// A fixed name, so the Dockerfile does not depend on the project version.
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    archiveFileName = "app.jar"
+}
