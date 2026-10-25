@@ -1,0 +1,24 @@
+# Started automatically by `./gradlew bootRun --args='--spring.profiles.active=local'`
+# via spring-boot-docker-compose, which reads the mapped port and wires the datasource.
+#
+# The port is published WITHOUT a host port so Docker picks a free one and nothing collides.
+# Postgres 17.7 matches the platform's CloudNativePG version (research R-007).
+name: hl-budget-local
+
+services:
+  postgres:
+    image: postgres:17.7-alpine
+    environment:
+      POSTGRES_DB: hl-budget
+      POSTGRES_USER: hl-budget
+      POSTGRES_PASSWORD: hl-budget
+    ports:
+      - "5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U hl-budget -d hl-budget" ]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    tmpfs:
+      # Disposable local data. Postgres 17 keeps its data under /var/lib/postgresql/data.
+      - /var/lib/postgresql/data

@@ -1,0 +1,11 @@
+# Applied by AbstractIntegrationTest via @ActiveProfiles("test").
+# Datasource from the Testcontainers @ServiceConnection; hlbudget.auth.* from @DynamicPropertySource.
+spring:
+  docker:
+    compose:
+      enabled: false
+
+logging:
+  level:
+    org.testcontainers: WARN
+    com.github.dockerjava: WARN

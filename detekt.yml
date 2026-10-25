@@ -1,0 +1,62 @@
+# Deltas from detekt's default config only - buildUponDefaultConfig = true in build.gradle.kts.
+build:
+  maxIssues: 0
+
+formatting:
+  # ktlint owns formatting; running both means two tools reporting the same offence.
+  active: false
+
+complexity:
+  LongParameterList:
+    # Constructor injection and immutable DTOs legitimately take many parameters.
+    ignoreAnnotated: [ 'Entity', 'Service', 'RestController', 'Configuration', 'ConfigurationProperties' ]
+    functionThreshold: 8
+    constructorThreshold: 10
+  TooManyFunctions:
+    # @RestControllerAdvice collects one handler per exception type by design.
+    ignoreAnnotated: [ 'RestControllerAdvice', 'RestController' ]
+
+style:
+  MaxLineLength:
+    maxLineLength: 120
+  ReturnCount:
+    max: 3
+  ForbiddenComment:
+    # A TODO must not reach main.
+    comments:
+      - reason: 'Finish the work or open an issue; do not ship a TODO.'
+        value: 'TODO:'
+      - reason: 'Fix it or open an issue; do not ship a FIXME.'
+        value: 'FIXME:'
+  UnusedPrivateMember:
+    active: true
+  UnusedParameter:
+    # An @ExceptionHandler method's parameter list is the framework's contract, not the author's
+    # choice: several handlers answer from the ErrorCode and the request alone and have no use for
+    # the exception instance, but the parameter documents what the method handles.
+    ignoreAnnotated: [ 'ExceptionHandler' ]
+
+performance:
+  SpreadOperator:
+    # Fires on `runApplication<Application>(*args)` and on Spring's vararg matcher APIs. The copy
+    # is of a handful of strings, once, at startup; rewriting the idiom to satisfy the rule makes
+    # the code less recognisable for no gain.
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    # GlobalExceptionHandler exists precisely to catch Exception as a last resort.
+    ignoreAnnotated: [ 'ExceptionHandler' ]
+  SwallowedException:
+    active: true
+  ThrowingExceptionsWithoutMessageOrCause:
+    active: true
+
+naming:
+  FunctionNaming:
+    # Test names read as sentences inside backticks.
+    excludes: [ '**/test/**' ]
+
+potential-bugs:
+  UnsafeCallOnNullableType:
+    active: true

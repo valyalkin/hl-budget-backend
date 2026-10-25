@@ -1,0 +1,15 @@
+# Activated by `./gradlew bootRun --args='--spring.profiles.active=local'`.
+# spring-boot-docker-compose starts compose.yaml and injects the datasource (random host port).
+# HLBUDGET_AUTH_* come from .env.local (copy .env.example), read as a properties file.
+spring:
+  config:
+    import: optional:file:.env.local[.properties]
+  docker:
+    compose:
+      enabled: true
+      lifecycle-management: start_and_stop
+      file: compose.yaml
+
+logging:
+  level:
+    com.valyalkin.hlbudget: DEBUG

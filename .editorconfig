@@ -1,0 +1,28 @@
+# ktlint reads its configuration from here, not from build.gradle.kts.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+ktlint_code_style = ktlint_official
+max_line_length = 120
+# Spring and JPA annotations read better on their own line, which ktlint already enforces;
+# these two rules are the only deviations this project allows, both for Kotlin DSL ergonomics.
+ktlint_standard_annotation = enabled
+ktlint_standard_trailing-comma-on-call-site = enabled
+ktlint_standard_trailing-comma-on-declaration-site = enabled
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.sql]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
