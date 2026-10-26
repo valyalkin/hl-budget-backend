@@ -1,0 +1,333 @@
+openapi: 3.1.0
+info:
+  title: HL Budget API
+  description: |-
+    Backend for HL Budget. Every business endpoint is versioned under `/api/v{N}` and requires an
+    Auth0 access token for the HL Budget API audience. Every error is RFC 9457
+    `application/problem+json` with a stable `type` URN and a `traceId`.
+  version: 1.0.0
+servers:
+- url: /
+  description: Same host as the web app; the backend serves /api
+security:
+- bearerAuth: []
+tags:
+- name: Users
+  description: The signed-in user's own record
+- name: Operations
+  description: Unversioned probes for the platform (not routed through the ingress)
+paths:
+  /healthz:
+    get:
+      tags:
+      - Operations
+      summary: Liveness probe; checks no dependencies
+      operationId: liveness
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              example:
+                status: UP
+      security: []
+  /readyz:
+    get:
+      tags:
+      - Operations
+      summary: Readiness probe; fails while Postgres is unreachable
+      operationId: readiness
+      responses:
+        "200":
+          description: Ready to serve
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              example:
+                status: UP
+        "503":
+          description: Not ready (database unreachable). No details are disclosed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              example:
+                status: DOWN
+      security: []
+  /api/v1/users/me:
+    put:
+      tags:
+      - Users
+      summary: Create or refresh the caller's user record and return it
+      description: "Identifies the caller only from the validated access token (`sub`).\
+        \ On the first call for a `sub`, creates the user record and returns 201 with\
+        \ a `Location` header. On later calls, sets `lastSeenAt` to now, refreshes\
+        \ `displayName`, `email` and `avatarUrl` from the token's claims, and returns\
+        \ 200. Idempotent: concurrent first calls yield exactly one record. Takes\
+        \ no request body and no user identifier."
+      operationId: ensureMyProfile
+      responses:
+        "200":
+          description: Existing record refreshed
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+              examples:
+                returning:
+                  $ref: "#/components/examples/ProfileReturning"
+        "201":
+          description: Record created on first call
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/X-Request-Id"
+              style: simple
+            Location:
+              description: Address of the created resource
+              style: simple
+              schema:
+                type: string
+                example: /api/v1/users/me
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+              examples:
+                firstVisit:
+                  $ref: "#/components/examples/ProfileFirstVisit"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+components:
+  schemas:
+    Problem:
+      type: object
+      description: "RFC 9457 problem details, as produced by the backend's single\
+        \ error handler"
+      properties:
+        type:
+          type: string
+          description: Stable URN naming the error category
+          enum:
+          - urn:problem:hl-budget:unauthenticated
+          - urn:problem:hl-budget:access-denied
+          - urn:problem:hl-budget:bad-request
+          - urn:problem:hl-budget:not-found
+          - urn:problem:hl-budget:conflict
+          - urn:problem:hl-budget:unprocessable-entity
+          - urn:problem:hl-budget:internal-error
+          - urn:problem:hl-budget:service-unavailable
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+          maximum: 599
+          minimum: 400
+        detail:
+          type: string
+          description: "Human-readable explanation. For 5xx always a fixed, safe sentence"
+        instance:
+          type: string
+          description: Request path
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+          description: "Structured, scalar-only context; `reason` when a client must\
+            \ branch"
+        errors:
+          type: array
+          description: One entry per offending field (validation failures only)
+          items:
+            $ref: "#/components/schemas/FieldViolation"
+      required:
+      - instance
+      - status
+      - timestamp
+      - title
+      - traceId
+      - type
+    FieldViolation:
+      type: object
+      properties:
+        pointer:
+          type: string
+          example: "#/name"
+        field:
+          type: string
+          example: name
+        code:
+          type: string
+          example: NotBlank
+        message:
+          type: string
+          example: must not be blank
+      required:
+      - code
+      - field
+      - message
+      - pointer
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - UP
+          - DOWN
+      required:
+      - status
+    UserProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Opaque HL Budget identifier for the user. Not the Auth0 subject
+          example: 0b9f6c1e-3c1a-4f2e-9a57-2f1d6c2b8e11
+        displayName:
+          type:
+          - string
+          - "null"
+          description: Name from the identity provider; null when it has none
+          example: Alex Example
+          maxLength: 255
+        email:
+          type:
+          - string
+          - "null"
+          format: email
+          description: Email from the identity provider; null when it has none
+          example: alex@example.com
+          maxLength: 320
+        avatarUrl:
+          type:
+          - string
+          - "null"
+          format: uri
+          description: HTTPS address of the avatar image; null when there is none
+          example: https://lh3.googleusercontent.com/a/example
+          maxLength: 2048
+        firstSeenAt:
+          type: string
+          format: date-time
+          description: When the record was created (UTC)
+          example: 2026-10-25T09:15:00Z
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: When the user last called this operation (UTC)
+          example: 2026-10-26T18:02:41Z
+      required:
+      - avatarUrl
+      - displayName
+      - email
+      - firstSeenAt
+      - id
+      - lastSeenAt
+  responses:
+    Unauthenticated:
+      description: "Missing, malformed, expired, wrongly signed, wrong-issuer or wrong-audience\
+        \ token. No user data is returned or created."
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+        WWW-Authenticate:
+          schema:
+            type: string
+            example: Bearer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: urn:problem:hl-budget:unauthenticated
+            title: Unauthorized
+            status: 401
+            detail: A valid bearer token is required
+            instance: /api/v1/users/me
+            timestamp: 2026-10-25T09:15:00Z
+            traceId: 4be0baf6ee174255
+    InternalError:
+      description: Unexpected failure. Cause is logged against traceId and never returned
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: urn:problem:hl-budget:internal-error
+            title: Internal Server Error
+            status: 500
+            detail: An unexpected error occurred
+            instance: /api/v1/users/me
+            timestamp: 2026-10-25T09:15:00Z
+            traceId: 4be0baf6ee174255
+    ServiceUnavailable:
+      description: A required dependency (the database) is unreachable
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: urn:problem:hl-budget:service-unavailable
+            title: Service Unavailable
+            status: 503
+            detail: The service is temporarily unavailable
+            instance: /api/v1/users/me
+            timestamp: 2026-10-25T09:15:00Z
+            traceId: 4be0baf6ee174255
+  examples:
+    ProfileFirstVisit:
+      summary: First call creates the record
+      value:
+        id: 0b9f6c1e-3c1a-4f2e-9a57-2f1d6c2b8e11
+        displayName: Alex Example
+        email: alex@example.com
+        avatarUrl: https://lh3.googleusercontent.com/a/example
+        firstSeenAt: 2026-10-25T09:15:00Z
+        lastSeenAt: 2026-10-25T09:15:00Z
+    ProfileReturning:
+      summary: Later call refreshes lastSeenAt; no avatar at the identity provider
+      value:
+        id: 0b9f6c1e-3c1a-4f2e-9a57-2f1d6c2b8e11
+        displayName: Alex Example
+        email: alex@example.com
+        avatarUrl: null
+        firstSeenAt: 2026-10-25T09:15:00Z
+        lastSeenAt: 2026-10-26T18:02:41Z
+  headers:
+    X-Request-Id:
+      description: Trace reference for this request; equals `traceId` in any problem
+        body
+      schema:
+        type: string
+        example: 4be0baf6ee174255
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: "Auth0 access token (RS256) for the HL Budget API audience. Validated\
+        \ for signature, issuer, audience and expiry on every request."
+      scheme: bearer
+      bearerFormat: JWT

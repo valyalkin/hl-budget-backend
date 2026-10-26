@@ -1,0 +1,6 @@
+# Links this repository to its place in the homelab (valyalkin/hl-helm).
+# Read by .github/workflows/release.yaml and by the homelab skills.
+app: hl-budget # charts/apps/<app> in hl-helm; also the Kubernetes namespace
+service: backend # the <service>: values block and templates/<service>.yaml in that chart
+image: hl-budget-backend # pushed as ghcr.io/valyalkin/<image>
+platforms: linux/amd64 # the cluster node's architecture, e.g. linux/amd64 or linux/arm64
