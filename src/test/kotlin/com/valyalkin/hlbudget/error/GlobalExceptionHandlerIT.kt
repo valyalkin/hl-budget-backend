@@ -1,6 +1,7 @@
 package com.valyalkin.hlbudget.error
 
 import com.valyalkin.failures.FailureController
+import com.valyalkin.failures.MethodValidationController
 import com.valyalkin.hlbudget.support.AbstractIntegrationTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -17,6 +18,9 @@ class GlobalExceptionHandlerIT : AbstractIntegrationTest() {
     class FailureEndpoints {
         @Bean
         fun failureController(): FailureController = FailureController()
+
+        @Bean
+        fun methodValidationController(): MethodValidationController = MethodValidationController()
     }
 
     private fun RestTestClient.ResponseSpec.expectProblem(
@@ -186,6 +190,23 @@ class GlobalExceptionHandlerIT : AbstractIntegrationTest() {
             .header(HttpHeaders.AUTHORIZATION, bearer())
             .exchange()
             .expectViolation("#/X-Thing", "Required")
+    }
+
+    @Test
+    fun `with method validation, a body is still reported field by field and a header by its name`() {
+        client
+            .post()
+            .uri("/api/v1/test-method-validation/body")
+            .header(HttpHeaders.AUTHORIZATION, bearer())
+            .header("X-Thing", "toolong")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("""{"name":" ","count":1}""")
+            .exchange()
+            .expectProblem(422, "unprocessable-entity")
+            .jsonPath("$.errors[?(@.pointer == '#/name')].code")
+            .isEqualTo("NotBlank")
+            .jsonPath("$.errors[?(@.pointer == '#/X-Thing')].code")
+            .isEqualTo("Size")
     }
 
     @Test

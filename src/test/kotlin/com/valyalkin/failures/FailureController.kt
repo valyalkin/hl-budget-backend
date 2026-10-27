@@ -52,3 +52,14 @@ class FailureController {
         @PathVariable id: UUID,
     ): UUID = id
 }
+
+/** No @Validated: Spring's built-in method validation handles the constraints instead. */
+@RestController
+@RequestMapping("/api/v1/test-method-validation")
+class MethodValidationController {
+    @PostMapping("/body")
+    fun body(
+        @RequestHeader("X-Thing", required = false) @Size(max = 3) thing: String?,
+        @Valid @RequestBody payload: FailureController.Payload,
+    ): FailureController.Payload = payload
+}
