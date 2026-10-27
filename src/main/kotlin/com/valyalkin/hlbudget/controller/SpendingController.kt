@@ -2,10 +2,12 @@ package com.valyalkin.hlbudget.controller
 
 import com.valyalkin.hlbudget.config.OpenApiBudgetComponents
 import com.valyalkin.hlbudget.config.OpenApiConfig
+import com.valyalkin.hlbudget.dto.spending.SpendingPageResponse
 import com.valyalkin.hlbudget.dto.spending.SpendingRequest
 import com.valyalkin.hlbudget.dto.spending.SpendingResponse
 import com.valyalkin.hlbudget.dto.spending.toCommand
 import com.valyalkin.hlbudget.dto.spending.toResponse
+import com.valyalkin.hlbudget.model.SpendingFilter
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.service.SpendingService
 import io.swagger.v3.oas.annotations.Operation
@@ -18,8 +20,11 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
+import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -31,9 +36,11 @@ import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.net.URI
+import java.time.LocalDate
 import java.util.UUID
 
 /**
@@ -46,6 +53,70 @@ import java.util.UUID
 class SpendingController(
     private val spendings: SpendingService,
 ) {
+    @GetMapping
+    @Operation(
+        operationId = "listSpendings",
+        summary = "List the caller's spendings, paged, filtered and sorted",
+        description =
+            "Filters are optional and combine with AND; repeating `categoryId` or `accountId` matches any of " +
+                "the given ids. Ties in the sort order are broken by creation time in the same direction, " +
+                "then by id, so paging never skips or repeats a spending.",
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "One page; `items` is empty when nothing matches",
+        content = [Content(mediaType = JSON, schema = Schema(implementation = SpendingPageResponse::class))],
+    )
+    @ApiResponse(responseCode = "401", ref = UNAUTHENTICATED)
+    @ApiResponse(responseCode = "422", ref = OpenApiBudgetComponents.VALIDATION_FAILED)
+    @ApiResponse(responseCode = "500", ref = INTERNAL)
+    @ApiResponse(responseCode = "503", ref = UNAVAILABLE)
+    @Suppress("LongParameterList")
+    fun listSpendings(
+        @Parameter(hidden = true) identity: VerifiedIdentity,
+        @Parameter(description = "Earliest date, inclusive", example = "2026-10-01")
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        from: LocalDate?,
+        @Parameter(description = "Latest date, inclusive; must not be before `from`", example = "2026-10-31")
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        to: LocalDate?,
+        @Parameter(description = "Repeatable; matches any of the given categories")
+        @RequestParam(name = "categoryId", required = false)
+        categoryIds: List<UUID>?,
+        @Parameter(description = "Repeatable; matches any of the given accounts")
+        @RequestParam(name = "accountId", required = false)
+        accountIds: List<UUID>?,
+        @Parameter(description = "0-based page number")
+        @RequestParam(defaultValue = "0")
+        @Min(0, message = "must be 0 or more")
+        page: Int,
+        @Parameter(description = "Items per page, 1 to 100")
+        @RequestParam(defaultValue = "20")
+        @Min(1, message = "must be between 1 and 100")
+        @Max(MAX_PAGE_SIZE, message = "must be between 1 and 100")
+        size: Int,
+        @Parameter(
+            description = "Sort order",
+            schema =
+                Schema(
+                    type = "string",
+                    allowableValues = ["date,desc", "date,asc", "amount,desc", "amount,asc"],
+                    defaultValue = "date,desc",
+                ),
+        )
+        @RequestParam(required = false)
+        sort: String?,
+    ): SpendingPageResponse =
+        spendings
+            .list(
+                identity,
+                SpendingFilter(from, to, categoryIds.orEmpty().toSet(), accountIds.orEmpty().toSet(), sort),
+                page,
+                size,
+            ).toResponse()
+
     @PostMapping(consumes = [MediaType.APPLICATION_JSON_VALUE])
     @Operation(
         operationId = "createSpending",
@@ -175,6 +246,7 @@ class SpendingController(
         const val IDEMPOTENCY_HEADER: String = "Idempotency-Key"
         const val REPLAYED_HEADER: String = "Idempotent-Replayed"
         private const val MAX_KEY = 255
+        private const val MAX_PAGE_SIZE = 100L
         private const val JSON = MediaType.APPLICATION_JSON_VALUE
         private const val UNAUTHENTICATED = "#/components/responses/Unauthenticated"
         private const val INTERNAL = "#/components/responses/InternalError"

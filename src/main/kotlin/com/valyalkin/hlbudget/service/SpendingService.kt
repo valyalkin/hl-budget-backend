@@ -8,13 +8,18 @@ import com.valyalkin.hlbudget.model.CreateResult
 import com.valyalkin.hlbudget.model.Ref
 import com.valyalkin.hlbudget.model.Spending
 import com.valyalkin.hlbudget.model.SpendingCommand
+import com.valyalkin.hlbudget.model.SpendingFilter
+import com.valyalkin.hlbudget.model.SpendingPage
+import com.valyalkin.hlbudget.model.SpendingSort
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.category.CategoryRepository
 import com.valyalkin.hlbudget.repository.spending.SpendingEntity
 import com.valyalkin.hlbudget.repository.spending.SpendingInserts
 import com.valyalkin.hlbudget.repository.spending.SpendingRepository
+import com.valyalkin.hlbudget.repository.spending.SpendingSpecifications
 import com.valyalkin.hlbudget.repository.spending.toModel
+import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
@@ -111,6 +116,53 @@ class SpendingService(
     ) {
         val userId = currentUser.resolve(identity)
         spendings.delete(spendings.findByIdAndUserId(id, userId) ?: throw notFound(id))
+    }
+
+    /** One page of the caller's spendings (US4). Names come from 2 small lookups, not one per row. */
+    @Transactional
+    fun list(
+        identity: VerifiedIdentity,
+        filter: SpendingFilter,
+        page: Int,
+        size: Int,
+    ): SpendingPage {
+        val sort = checkList(filter)
+        val userId = currentUser.resolve(identity)
+        val found =
+            spendings.findAll(
+                SpendingSpecifications.matching(userId, filter),
+                PageRequest.of(page, size, SpendingSpecifications.sortOf(sort)),
+            )
+        val categoryNames = categories.findAllByUserId(userId).associate { it.id to it.name }
+        val accountNames = accounts.findAllByUserId(userId).associate { it.id to it.name }
+        val items =
+            found.content.map { spending ->
+                spending.toModel(
+                    Ref(spending.categoryId, categoryNames.getValue(spending.categoryId)),
+                    Ref(spending.accountId, accountNames.getValue(spending.accountId)),
+                    rules.currency,
+                )
+            }
+        return SpendingPage(items, page, size, found.totalElements, found.totalPages)
+    }
+
+    private fun checkList(filter: SpendingFilter): SpendingSort {
+        val violations = mutableListOf<FieldViolation>()
+        if (filter.from != null && filter.to != null && filter.from.isAfter(filter.to)) {
+            violations += FieldViolation("#/from", "from", "Range", "must not be after to")
+        }
+        val sort = filter.sort?.let { SpendingSort.fromApiValue(it) }
+        if (filter.sort != null && sort == null) {
+            violations +=
+                FieldViolation(
+                    "#/sort",
+                    "sort",
+                    "Unknown",
+                    "must be one of ${SpendingSort.API_VALUES.joinToString(", ")}",
+                )
+        }
+        if (violations.isNotEmpty()) throw ValidationException(violations)
+        return sort ?: SpendingSort.DEFAULT
     }
 
     /**
