@@ -44,4 +44,30 @@ class DeleteInUseIT : AbstractIntegrationTest() {
         delete(alice, "/api/v1/accounts/$amex").expectStatus().isNoContent()
         getJson(alice, "/api/v1/accounts/$cash").expectBody().jsonPath("$.spendingCount").isEqualTo(2)
     }
+
+    @Test
+    fun `a custom category in use cannot be deleted until its spendings move`() {
+        var coffee = ""
+        sendJson(alice, "POST", "/api/v1/categories", """{"name":"Coffee"}""")
+            .expectStatus()
+            .isCreated()
+            .expectBody()
+            .jsonPath("$.id")
+            .value<String> { coffee = it }
+        val spending = createSpending(alice, coffee, amex)
+
+        delete(alice, "/api/v1/categories/$coffee")
+            .expectStatus()
+            .isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.details.reason")
+            .isEqualTo("in-use")
+            .jsonPath("$.details.spendingCount")
+            .isEqualTo(1)
+        getJson(alice, "/api/v1/categories/$coffee").expectBody().jsonPath("$.spendingCount").isEqualTo(1)
+
+        val groceries = categories.getValue("Groceries")
+        sendJson(alice, "PUT", "/api/v1/spendings/$spending", spendingJson(groceries, amex)).expectStatus().isOk()
+        delete(alice, "/api/v1/categories/$coffee").expectStatus().isNoContent()
+    }
 }

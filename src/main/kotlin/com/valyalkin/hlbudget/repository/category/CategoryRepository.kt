@@ -36,4 +36,22 @@ interface CategoryRepository : JpaRepository<CategoryEntity, UUID> {
     ): CategoryEntity?
 
     fun findAllByUserId(userId: UUID): List<CategoryEntity>
+
+    fun existsByUserIdAndNameIgnoreCase(
+        userId: UUID,
+        name: String,
+    ): Boolean
+
+    fun existsByUserIdAndNameIgnoreCaseAndIdNot(
+        userId: UUID,
+        name: String,
+        id: UUID,
+    ): Boolean
+
+    /** `FOR UPDATE`, for the same reason as in AccountRepository: the in-use count read next is final. */
+    @Query(value = "SELECT * FROM categories WHERE id = :id AND user_id = :userId FOR UPDATE", nativeQuery = true)
+    fun lockByIdAndUserId(
+        id: UUID,
+        userId: UUID,
+    ): CategoryEntity?
 }
