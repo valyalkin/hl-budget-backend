@@ -5,6 +5,11 @@ spring:
     compose:
       enabled: false
 
+hlbudget:
+  money:
+    currency: CAD
+  time-zone: America/Toronto
+
 logging:
   level:
     org.testcontainers: WARN

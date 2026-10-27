@@ -92,8 +92,8 @@ class GlobalExceptionHandlerTest {
                 request,
             )
 
-        assertThat(problem.status).isEqualTo(400)
-        assertThat(problem.type.toString()).isEqualTo("urn:problem:hl-budget:bad-request")
+        assertThat(problem.status).isEqualTo(422)
+        assertThat(problem.type.toString()).isEqualTo("urn:problem:hl-budget:unprocessable-entity")
         assertThat(problem.detail).isEqualTo("1 field is invalid: reference")
         assertThat(
             problem.errors(),
@@ -121,6 +121,42 @@ class GlobalExceptionHandlerTest {
 
         assertThat(problem.status).isEqualTo(400)
         assertThat(problem.detail).isEqualTo("The request body is not valid JSON.")
+    }
+
+    @Test
+    fun `a validation exception from a service is a 422 listing every violation`() {
+        val problem =
+            handler.handleBusiness(
+                ValidationException(
+                    listOf(
+                        FieldViolation("#/date", "date", "NotFuture", "must be today or earlier"),
+                        FieldViolation("#/amount/amount", "amount.amount", "Positive", "must be greater than 0"),
+                    ),
+                ),
+                request,
+            )
+
+        assertThat(problem.status).isEqualTo(422)
+        assertThat(problem.type.toString()).isEqualTo("urn:problem:hl-budget:unprocessable-entity")
+        assertThat(problem.detail).isEqualTo("2 fields are invalid: date, amount.amount")
+        assertThat(problem.errors()).hasSize(2)
+        assertThat(problem.properties?.get("details")).isNull()
+    }
+
+    @Test
+    fun `a conflict exception is a 409 carrying its reason`() {
+        val problem =
+            handler.handleBusiness(
+                ConflictException(
+                    "Account a is used by 2 spendings",
+                    mapOf("reason" to "in-use", "spendingCount" to 2),
+                ),
+                request,
+            )
+
+        assertThat(problem.status).isEqualTo(409)
+        assertThat(problem.type.toString()).isEqualTo("urn:problem:hl-budget:conflict")
+        assertThat(problem.properties?.get("details")).isEqualTo(mapOf("reason" to "in-use", "spendingCount" to 2))
     }
 
     @Test

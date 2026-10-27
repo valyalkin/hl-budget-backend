@@ -30,11 +30,16 @@ class OpenApiConfig {
             .tags(
                 listOf(
                     Tag().name(TAG_USERS).description("The signed-in user's own record"),
+                    Tag().name(TAG_ACCOUNTS).description("Where the caller's money was paid from"),
+                    Tag()
+                        .name(TAG_CATEGORIES)
+                        .description("What the caller's money was spent on, including the 17 defaults"),
+                    Tag().name(TAG_SPENDINGS).description("The caller's spending transactions"),
                     Tag()
                         .name(TAG_OPERATIONS)
                         .description("Unversioned probes for the platform (not routed through the ingress)"),
                 ),
-            ).components(OpenApiComponents.components())
+            ).components(OpenApiBudgetComponents.register(OpenApiComponents.components()))
             .paths(OpenApiProbes.probePaths())
             .addSecurityItem(SecurityRequirement().addList(BEARER_SCHEME))
 
@@ -42,6 +47,9 @@ class OpenApiConfig {
         const val BEARER_SCHEME = "bearerAuth"
         const val TAG_USERS = "Users"
         const val TAG_OPERATIONS = "Operations"
+        const val TAG_ACCOUNTS = "Accounts"
+        const val TAG_CATEGORIES = "Categories"
+        const val TAG_SPENDINGS = "Spendings"
         const val PROBLEM_SCHEMA = "Problem"
         const val FIELD_VIOLATION_SCHEMA = "FieldViolation"
         const val HEALTH_SCHEMA = "HealthStatus"

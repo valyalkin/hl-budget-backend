@@ -30,6 +30,9 @@ class UserEntity(
     var firstSeenAt: Instant,
     @Column(name = "last_seen_at", nullable = false)
     var lastSeenAt: Instant,
+    /** When the default categories were created; written only by [CurrentUserRepository]. */
+    @Column(name = "categories_seeded_at")
+    var categoriesSeededAt: Instant? = null,
     @Version
     @Column(name = "version", nullable = false)
     var version: Long = 0,

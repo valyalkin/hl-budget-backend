@@ -20,6 +20,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.HandlerMethodValidationException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
@@ -52,6 +53,9 @@ class GlobalExceptionHandler(
             exception.message,
             exception.details,
         )
+        if (exception is ValidationException) {
+            return problems.create(exception.status, exception.message, request, violations = exception.violations)
+        }
         return problems.from(exception, request)
     }
 
@@ -114,12 +118,24 @@ class GlobalExceptionHandler(
         }
     }
 
+    /**
+     * A query parameter or header of the wrong type is a field the caller can fix (422). A path
+     * segment that is not the right type (`/spendings/abc`) has no field to point at: the URL
+     * itself is malformed (400, research R-009).
+     */
     @ExceptionHandler(MethodArgumentTypeMismatchException::class)
     fun handleTypeMismatch(
         exception: MethodArgumentTypeMismatchException,
         request: HttpServletRequest,
     ): ProblemDetail {
         val expected = exception.requiredType?.simpleName ?: "the expected type"
+        if (exception.parameter.hasParameterAnnotation(PathVariable::class.java)) {
+            return problems.create(
+                HttpStatus.BAD_REQUEST,
+                "The path segment ${exception.name} must be a valid $expected.",
+                request,
+            )
+        }
         return validationProblem(
             listOf(FieldViolation("#/${exception.name}", exception.name, "TypeMismatch", "must be a valid $expected")),
             request,
@@ -258,19 +274,14 @@ class GlobalExceptionHandler(
         request: HttpServletRequest,
     ): ProblemDetail {
         log.warn(
-            "400 validation failed on {} {} (traceId={}): {}",
+            "422 validation failed on {} {} (traceId={}): {}",
             request.method,
             request.requestURI,
             RequestId.of(request),
             found.joinToString { it.field },
         )
-        val detail =
-            when (found.size) {
-                0 -> "The request is invalid."
-                1 -> "1 field is invalid: ${found.first().field}"
-                else -> "${found.size} fields are invalid: ${found.joinToString { it.field }}"
-            }
-        return problems.create(HttpStatus.BAD_REQUEST, detail, request, violations = found)
+        val detail = if (found.isEmpty()) "The request is invalid." else ValidationException.describe(found)
+        return problems.create(HttpStatus.UNPROCESSABLE_ENTITY, detail, request, violations = found)
     }
 
     private fun logServerFailure(
