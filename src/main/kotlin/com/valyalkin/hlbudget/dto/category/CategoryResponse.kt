@@ -10,7 +10,7 @@ data class CategoryResponse(
     val id: UUID,
     @field:Schema(example = "Groceries", maxLength = 50)
     val name: String,
-    @field:Schema(
+    @get:Schema(
         description = "True for the 17 categories every user starts with; they cannot be renamed or deleted",
         accessMode = Schema.AccessMode.READ_ONLY,
     )

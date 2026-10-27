@@ -7,6 +7,7 @@ import io.swagger.v3.oas.models.info.Info
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.servers.Server
 import io.swagger.v3.oas.models.tags.Tag
+import org.springdoc.core.customizers.OpenApiCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -43,7 +44,29 @@ class OpenApiConfig {
             .paths(OpenApiProbes.probePaths())
             .addSecurityItem(SecurityRequirement().addList(BEARER_SCHEME))
 
+    /**
+     * Every property of the feature 002 response schemas is non-null in Kotlin, so all of them are
+     * required in the contract. Without this the frontend's generated types would make every
+     * response field optional.
+     */
+    @Bean
+    fun requiredResponseFields(): OpenApiCustomizer =
+        OpenApiCustomizer { openApi ->
+            openApi.components?.schemas.orEmpty().forEach { (name, schema) ->
+                if (name in FULLY_REQUIRED_SCHEMAS) {
+                    schema.required =
+                        schema.properties
+                            .orEmpty()
+                            .keys
+                            .toList()
+                }
+            }
+        }
+
     companion object {
+        private val FULLY_REQUIRED_SCHEMAS =
+            setOf("Account", "AccountList", "Category", "CategoryList", "Spending", "SpendingPage", "Money", "Ref")
+
         const val BEARER_SCHEME = "bearerAuth"
         const val TAG_USERS = "Users"
         const val TAG_OPERATIONS = "Operations"

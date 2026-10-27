@@ -1,8 +1,5 @@
 package com.valyalkin.hlbudget.service
 
-import com.valyalkin.hlbudget.error.ConflictException
-import com.valyalkin.hlbudget.error.DuplicateException
-import com.valyalkin.hlbudget.error.NotFoundException
 import com.valyalkin.hlbudget.error.UnprocessableEntityException
 import com.valyalkin.hlbudget.model.Category
 import com.valyalkin.hlbudget.model.NameCommand
@@ -37,17 +34,23 @@ class CategoryService(
     fun get(
         identity: VerifiedIdentity,
         id: UUID,
-    ): Category = categories.findWithCount(currentUser.resolve(identity), id)?.toModel() ?: throw notFound(id)
+    ): Category = categories.findWithCount(currentUser.resolve(identity), id)?.toModel() ?: throw notFound(RESOURCE, id)
 
     fun create(
         identity: VerifiedIdentity,
         command: NameCommand,
     ): Category {
         val userId = currentUser.resolve(identity)
-        if (categories.existsByUserIdAndNameIgnoreCase(userId, command.name)) throw duplicate(command.name)
+        if (categories.existsByUserIdAndNameIgnoreCase(
+                userId,
+                command.name,
+            )
+        ) {
+            throw duplicateName(RESOURCE, command.name)
+        }
         val now = Instant.now(clock)
         val saved =
-            saveOrDuplicate(command.name) {
+            saveOrDuplicate(RESOURCE, command.name) {
                 categories.saveAndFlush(
                     CategoryEntity(userId = userId, name = command.name, createdAt = now, updatedAt = now),
                 )
@@ -61,13 +64,13 @@ class CategoryService(
         command: NameCommand,
     ): Category {
         val userId = currentUser.resolve(identity)
-        val category = categories.findByIdAndUserId(id, userId) ?: throw notFound(id)
+        val category = owned(id, userId)
         refuseDefault(category)
-        if (categories.existsByUserIdAndNameIgnoreCaseAndIdNot(userId, command.name, id)) throw duplicate(command.name)
+        requireNameFree(userId, command.name, id)
         category.name = command.name
         category.updatedAt = Instant.now(clock)
-        saveOrDuplicate(command.name) { categories.saveAndFlush(category) }
-        return categories.findWithCount(userId, id)?.toModel() ?: throw notFound(id)
+        saveOrDuplicate(RESOURCE, command.name) { categories.saveAndFlush(category) }
+        return withCount(userId, id)
     }
 
     fun delete(
@@ -75,16 +78,15 @@ class CategoryService(
         id: UUID,
     ) {
         val userId = currentUser.resolve(identity)
-        val category = categories.lockByIdAndUserId(id, userId) ?: throw notFound(id)
+        val category = categories.lockByIdAndUserId(id, userId) ?: throw notFound(RESOURCE, id)
         refuseDefault(category)
-        val used = spendings.countByUserIdAndCategoryId(userId, id)
-        if (used > 0) throw inUse(id, used)
+        requireUnused(userId, id)
         try {
             categories.delete(category)
             categories.flush()
         } catch (exception: DataIntegrityViolationException) {
             // Only reachable if a spending slipped in despite the row lock (see AccountService).
-            throw inUse(id, 1, exception)
+            throw inUse(RESOURCE, id, 1, exception)
         }
     }
 
@@ -97,35 +99,40 @@ class CategoryService(
         }
     }
 
-    private fun <T> saveOrDuplicate(
-        name: String,
-        save: () -> T,
-    ): T =
-        try {
-            save()
-        } catch (exception: DataIntegrityViolationException) {
-            throw duplicate(name, exception)
-        }
-
-    private fun notFound(id: UUID) =
-        NotFoundException("Category $id was not found", mapOf("resource" to "category", "categoryId" to id))
-
-    private fun duplicate(
-        name: String,
-        cause: Throwable? = null,
-    ) = DuplicateException(
-        "A category named \"$name\" already exists",
-        mapOf("reason" to "duplicate-name", "name" to name),
-        cause,
-    )
-
-    private fun inUse(
+    private fun owned(
         id: UUID,
-        count: Long,
-        cause: Throwable? = null,
-    ) = ConflictException(
-        "Category $id is used by $count spendings",
-        mapOf("reason" to "in-use", "spendingCount" to count),
-        cause,
-    )
+        userId: UUID,
+    ): CategoryEntity = categories.findByIdAndUserId(id, userId) ?: throw notFound(RESOURCE, id)
+
+    private fun withCount(
+        userId: UUID,
+        id: UUID,
+    ): Category = categories.findWithCount(userId, id)?.toModel() ?: throw notFound(RESOURCE, id)
+
+    private fun requireNameFree(
+        userId: UUID,
+        name: String,
+        excluding: UUID,
+    ) {
+        if (categories.existsByUserIdAndNameIgnoreCaseAndIdNot(
+                userId,
+                name,
+                excluding,
+            )
+        ) {
+            throw duplicateName(RESOURCE, name)
+        }
+    }
+
+    private fun requireUnused(
+        userId: UUID,
+        id: UUID,
+    ) {
+        val used = spendings.countByUserIdAndCategoryId(userId, id)
+        if (used > 0) throw inUse(RESOURCE, id, used)
+    }
+
+    private companion object {
+        const val RESOURCE = "category"
+    }
 }

@@ -1,8 +1,5 @@
 package com.valyalkin.hlbudget.service
 
-import com.valyalkin.hlbudget.error.ConflictException
-import com.valyalkin.hlbudget.error.DuplicateException
-import com.valyalkin.hlbudget.error.NotFoundException
 import com.valyalkin.hlbudget.model.Account
 import com.valyalkin.hlbudget.model.NameCommand
 import com.valyalkin.hlbudget.model.VerifiedIdentity
@@ -34,7 +31,7 @@ class AccountService(
     fun get(
         identity: VerifiedIdentity,
         id: UUID,
-    ): Account = accounts.findWithCount(currentUser.resolve(identity), id)?.toModel() ?: throw notFound(id)
+    ): Account = accounts.findWithCount(currentUser.resolve(identity), id)?.toModel() ?: throw notFound(RESOURCE, id)
 
     @Transactional
     fun create(
@@ -42,10 +39,10 @@ class AccountService(
         command: NameCommand,
     ): Account {
         val userId = currentUser.resolve(identity)
-        if (accounts.existsByUserIdAndNameIgnoreCase(userId, command.name)) throw duplicate(command.name)
+        if (accounts.existsByUserIdAndNameIgnoreCase(userId, command.name)) throw duplicateName(RESOURCE, command.name)
         val now = Instant.now(clock)
         val saved =
-            saveOrDuplicate(command.name) {
+            saveOrDuplicate(RESOURCE, command.name) {
                 accounts.saveAndFlush(
                     AccountEntity(userId = userId, name = command.name, createdAt = now, updatedAt = now),
                 )
@@ -60,12 +57,12 @@ class AccountService(
         command: NameCommand,
     ): Account {
         val userId = currentUser.resolve(identity)
-        val account = accounts.findByIdAndUserId(id, userId) ?: throw notFound(id)
-        if (accounts.existsByUserIdAndNameIgnoreCaseAndIdNot(userId, command.name, id)) throw duplicate(command.name)
+        val account = owned(id, userId)
+        requireNameFree(userId, command.name, id)
         account.name = command.name
         account.updatedAt = Instant.now(clock)
-        saveOrDuplicate(command.name) { accounts.saveAndFlush(account) }
-        return accounts.findWithCount(userId, id)?.toModel() ?: throw notFound(id)
+        saveOrDuplicate(RESOURCE, command.name) { accounts.saveAndFlush(account) }
+        return withCount(userId, id)
     }
 
     @Transactional
@@ -74,48 +71,52 @@ class AccountService(
         id: UUID,
     ) {
         val userId = currentUser.resolve(identity)
-        val account = accounts.lockByIdAndUserId(id, userId) ?: throw notFound(id)
-        val used = spendings.countByUserIdAndAccountId(userId, id)
-        if (used > 0) throw inUse(id, used)
+        val account = accounts.lockByIdAndUserId(id, userId) ?: throw notFound(RESOURCE, id)
+        requireUnused(userId, id)
         try {
             accounts.delete(account)
             accounts.flush()
         } catch (exception: DataIntegrityViolationException) {
             // Only reachable if a spending slipped in despite the row lock; the statement failed, so
             // the transaction cannot count again. At least one spending uses the account.
-            throw inUse(id, 1, exception)
+            throw inUse(RESOURCE, id, 1, exception)
         }
     }
 
-    private fun <T> saveOrDuplicate(
-        name: String,
-        save: () -> T,
-    ): T =
-        try {
-            save()
-        } catch (exception: DataIntegrityViolationException) {
-            throw duplicate(name, exception)
-        }
-
-    private fun notFound(id: UUID) =
-        NotFoundException("Account $id was not found", mapOf("resource" to "account", "accountId" to id))
-
-    private fun duplicate(
-        name: String,
-        cause: Throwable? = null,
-    ) = DuplicateException(
-        "An account named \"$name\" already exists",
-        mapOf("reason" to "duplicate-name", "name" to name),
-        cause,
-    )
-
-    private fun inUse(
+    private fun owned(
         id: UUID,
-        count: Long,
-        cause: Throwable? = null,
-    ) = ConflictException(
-        "Account $id is used by $count spendings",
-        mapOf("reason" to "in-use", "spendingCount" to count),
-        cause,
-    )
+        userId: UUID,
+    ): AccountEntity = accounts.findByIdAndUserId(id, userId) ?: throw notFound(RESOURCE, id)
+
+    private fun withCount(
+        userId: UUID,
+        id: UUID,
+    ): Account = accounts.findWithCount(userId, id)?.toModel() ?: throw notFound(RESOURCE, id)
+
+    private fun requireNameFree(
+        userId: UUID,
+        name: String,
+        excluding: UUID,
+    ) {
+        if (accounts.existsByUserIdAndNameIgnoreCaseAndIdNot(
+                userId,
+                name,
+                excluding,
+            )
+        ) {
+            throw duplicateName(RESOURCE, name)
+        }
+    }
+
+    private fun requireUnused(
+        userId: UUID,
+        id: UUID,
+    ) {
+        val used = spendings.countByUserIdAndAccountId(userId, id)
+        if (used > 0) throw inUse(RESOURCE, id, used)
+    }
+
+    private companion object {
+        const val RESOURCE = "account"
+    }
 }

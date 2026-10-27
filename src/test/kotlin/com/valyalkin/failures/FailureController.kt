@@ -58,6 +58,7 @@ class FailureController {
 @RequestMapping("/api/v1/test-method-validation")
 class MethodValidationController {
     @PostMapping("/body")
+    @Suppress("UnusedParameter")
     fun body(
         @RequestHeader("X-Thing", required = false) @Size(max = 3) thing: String?,
         @Valid @RequestBody payload: FailureController.Payload,
