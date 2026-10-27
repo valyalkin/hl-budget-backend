@@ -54,4 +54,18 @@ class CurrentUserRepository(
             .query(UUID::class.java)
             .optional()
             .isPresent
+
+    /** Runs once per user, right after a successful [claimSeeding], in the same transaction. */
+    fun insertDefaultCategories(
+        userId: UUID,
+        names: List<String>,
+    ) {
+        names.forEach { name ->
+            jdbc
+                .sql("INSERT INTO categories (user_id, name, is_default) VALUES (:userId, :name, true)")
+                .param("userId", userId)
+                .param("name", name)
+                .update()
+        }
+    }
 }

@@ -1,5 +1,6 @@
 package com.valyalkin.hlbudget.service
 
+import com.valyalkin.hlbudget.model.DefaultCategories
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.CurrentUserRepository
 import com.valyalkin.hlbudget.repository.CurrentUserRow
@@ -15,6 +16,7 @@ import java.util.UUID
 class CurrentUserServiceTest {
     private val users = mockk<CurrentUserRepository>(relaxed = true)
     private val service = CurrentUserService(users)
+    private val names = DefaultCategories.NAMES
     private val identity = VerifiedIdentity("auth0|alice", "Alice", "alice@example.com", null)
     private val id = UUID.randomUUID()
 
@@ -39,5 +41,35 @@ class CurrentUserServiceTest {
             users.insertIfMissing("auth0|alice")
             users.findBySubject("auth0|alice")
         }
+    }
+
+    @Test
+    fun `an unseeded user who wins the claim gets the 17 defaults`() {
+        every { users.findBySubject("auth0|alice") } returns CurrentUserRow(id, null)
+        every { users.claimSeeding(id) } returns true
+
+        service.resolve(identity)
+
+        verify(exactly = 1) { users.insertDefaultCategories(id, names) }
+        assertThat(names).hasSize(17)
+    }
+
+    @Test
+    fun `an unseeded user who loses the claim gets nothing inserted`() {
+        every { users.findBySubject("auth0|alice") } returns CurrentUserRow(id, null)
+        every { users.claimSeeding(id) } returns false
+
+        service.resolve(identity)
+
+        verify(exactly = 0) { users.insertDefaultCategories(any(), any()) }
+    }
+
+    @Test
+    fun `a seeded user never tries to claim seeding`() {
+        every { users.findBySubject("auth0|alice") } returns CurrentUserRow(id, Instant.now())
+
+        service.resolve(identity)
+
+        verify(exactly = 0) { users.claimSeeding(any()) }
     }
 }
