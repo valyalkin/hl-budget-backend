@@ -7,6 +7,7 @@ import io.swagger.v3.oas.models.info.Info
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.servers.Server
 import io.swagger.v3.oas.models.tags.Tag
+import org.springdoc.core.customizers.OpenApiCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -30,18 +31,48 @@ class OpenApiConfig {
             .tags(
                 listOf(
                     Tag().name(TAG_USERS).description("The signed-in user's own record"),
+                    Tag().name(TAG_ACCOUNTS).description("Where the caller's money was paid from"),
+                    Tag()
+                        .name(TAG_CATEGORIES)
+                        .description("What the caller's money was spent on, including the 17 defaults"),
+                    Tag().name(TAG_SPENDINGS).description("The caller's spending transactions"),
                     Tag()
                         .name(TAG_OPERATIONS)
                         .description("Unversioned probes for the platform (not routed through the ingress)"),
                 ),
-            ).components(OpenApiComponents.components())
+            ).components(OpenApiBudgetComponents.register(OpenApiComponents.components()))
             .paths(OpenApiProbes.probePaths())
             .addSecurityItem(SecurityRequirement().addList(BEARER_SCHEME))
 
+    /**
+     * Every property of the feature 002 response schemas is non-null in Kotlin, so all of them are
+     * required in the contract. Without this the frontend's generated types would make every
+     * response field optional.
+     */
+    @Bean
+    fun requiredResponseFields(): OpenApiCustomizer =
+        OpenApiCustomizer { openApi ->
+            openApi.components?.schemas.orEmpty().forEach { (name, schema) ->
+                if (name in FULLY_REQUIRED_SCHEMAS) {
+                    schema.required =
+                        schema.properties
+                            .orEmpty()
+                            .keys
+                            .toList()
+                }
+            }
+        }
+
     companion object {
+        private val FULLY_REQUIRED_SCHEMAS =
+            setOf("Account", "AccountList", "Category", "CategoryList", "Spending", "SpendingPage", "Money", "Ref")
+
         const val BEARER_SCHEME = "bearerAuth"
         const val TAG_USERS = "Users"
         const val TAG_OPERATIONS = "Operations"
+        const val TAG_ACCOUNTS = "Accounts"
+        const val TAG_CATEGORIES = "Categories"
+        const val TAG_SPENDINGS = "Spendings"
         const val PROBLEM_SCHEMA = "Problem"
         const val FIELD_VIOLATION_SCHEMA = "FieldViolation"
         const val HEALTH_SCHEMA = "HealthStatus"

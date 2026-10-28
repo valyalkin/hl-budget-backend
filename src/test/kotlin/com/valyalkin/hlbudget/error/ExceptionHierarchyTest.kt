@@ -13,6 +13,9 @@ class ExceptionHierarchyTest {
         assertThat(NotFoundException("x").status).isEqualTo(HttpStatus.NOT_FOUND)
         assertThat(DuplicateException("x").status).isEqualTo(HttpStatus.CONFLICT)
         assertThat(UnprocessableEntityException("x").status).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY)
+        assertThat(ConflictException("x").status).isEqualTo(HttpStatus.CONFLICT)
+        assertThat(ValidationException(listOf(FieldViolation("#/a", "a", "NotBlank", "must not be blank"))).status)
+            .isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY)
         assertThat(SystemException("x").status).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
     }
 
@@ -28,6 +31,15 @@ class ExceptionHierarchyTest {
             .isInstanceOf(IllegalArgumentException::class.java)
         assertThatThrownBy { SystemException("x", status = HttpStatus.BAD_REQUEST) }
             .isInstanceOf(IllegalArgumentException::class.java)
+    }
+
+    @Test
+    fun `a validation exception describes its violations and refuses an empty list`() {
+        val one = FieldViolation("#/a", "a", "NotBlank", "must not be blank")
+        assertThat(ValidationException(listOf(one)).message).isEqualTo("1 field is invalid: a")
+        assertThat(ValidationException(listOf(one, one.copy(field = "b"))).message)
+            .isEqualTo("2 fields are invalid: a, b")
+        assertThatThrownBy { ValidationException(emptyList()) }.isInstanceOf(IllegalArgumentException::class.java)
     }
 
     @Test

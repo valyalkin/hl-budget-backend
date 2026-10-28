@@ -10,6 +10,12 @@ spring:
       lifecycle-management: start_and_stop
       file: compose.yaml
 
+# Non-secret defaults for local runs; .env.local may override them.
+hlbudget:
+  money:
+    currency: ${HLBUDGET_MONEY_CURRENCY:CAD}
+  time-zone: ${HLBUDGET_TIMEZONE:America/Toronto}
+
 logging:
   level:
     com.valyalkin.hlbudget: DEBUG

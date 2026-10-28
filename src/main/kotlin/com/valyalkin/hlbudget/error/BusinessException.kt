@@ -59,6 +59,18 @@ class DuplicateException(
 ) : BusinessException(HttpStatus.CONFLICT, message, details, cause)
 
 /**
+ * The write is refused by the current state of something it depends on - deleting an account that
+ * spendings still use, for instance. 409. Unlike [DuplicateException] it is not about uniqueness,
+ * and unlike [UnprocessableEntityException] the caller can fix it by changing that state. Always
+ * put a `reason` in [details].
+ */
+class ConflictException(
+    message: String,
+    details: Map<String, Any> = emptyMap(),
+    cause: Throwable? = null,
+) : BusinessException(HttpStatus.CONFLICT, message, details, cause)
+
+/**
  * The request was well formed and the resource exists, but a business rule refuses it - paying an
  * already-paid invoice, for instance. 422, which is what distinguishes "I cannot parse this" (400)
  * from "I understood you and the answer is no".
@@ -67,7 +79,7 @@ class DuplicateException(
  * rule refused. Put a discriminator in it - `mapOf("reason" to "already-paid")` - whenever more
  * than one rule can produce the same status.
  */
-class UnprocessableEntityException(
+open class UnprocessableEntityException(
     message: String,
     details: Map<String, Any> = emptyMap(),
     cause: Throwable? = null,
@@ -78,3 +90,24 @@ class UnauthenticatedException(
     message: String,
     details: Map<String, Any> = emptyMap(),
 ) : BusinessException(HttpStatus.UNAUTHORIZED, message, details)
+
+/**
+ * One or more request fields broke a rule that only the service can check - a date after "today"
+ * in the app's time zone, a reference to a category the caller does not own. 422, rendered with
+ * the same `errors` array as a Bean Validation failure, so a client sees one shape for "fix these
+ * fields" whichever layer found them (research R-009).
+ */
+class ValidationException(
+    val violations: List<FieldViolation>,
+) : UnprocessableEntityException(describe(violations)) {
+    companion object {
+        /** The problem `detail` for a list of violations; shared with the handler. */
+        fun describe(violations: List<FieldViolation>): String {
+            require(violations.isNotEmpty()) { "A ValidationException needs at least one violation" }
+            return when (violations.size) {
+                1 -> "1 field is invalid: ${violations.first().field}"
+                else -> "${violations.size} fields are invalid: ${violations.joinToString { it.field }}"
+            }
+        }
+    }
+}

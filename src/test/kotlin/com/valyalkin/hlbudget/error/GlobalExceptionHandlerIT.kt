@@ -1,6 +1,7 @@
 package com.valyalkin.hlbudget.error
 
 import com.valyalkin.failures.FailureController
+import com.valyalkin.failures.MethodValidationController
 import com.valyalkin.hlbudget.support.AbstractIntegrationTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -17,6 +18,9 @@ class GlobalExceptionHandlerIT : AbstractIntegrationTest() {
     class FailureEndpoints {
         @Bean
         fun failureController(): FailureController = FailureController()
+
+        @Bean
+        fun methodValidationController(): MethodValidationController = MethodValidationController()
     }
 
     private fun RestTestClient.ResponseSpec.expectProblem(
@@ -111,6 +115,110 @@ class GlobalExceptionHandlerIT : AbstractIntegrationTest() {
             .exchange()
             .expectHeader()
             .value("X-Request-Id") { assertThat(it).matches("[0-9a-f]{16}") }
+    }
+
+    private fun RestTestClient.ResponseSpec.expectViolation(
+        pointer: String,
+        code: String,
+    ) = expectProblem(422, "unprocessable-entity")
+        .jsonPath("$.errors[0].pointer")
+        .isEqualTo(pointer)
+        .jsonPath("$.errors[0].code")
+        .isEqualTo(code)
+
+    private fun postBody(json: String) =
+        client
+            .post()
+            .uri("/api/v1/test-failures/body")
+            .header(HttpHeaders.AUTHORIZATION, bearer())
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(json)
+            .exchange()
+
+    @Test
+    fun `a body constraint failure is a 422 naming the field without echoing the value`() {
+        postBody("""{"name":"   ","count":1}""")
+            .expectViolation("#/name", "NotBlank")
+            .consumeWith { result -> assertThat(String(result.responseBody ?: ByteArray(0))).doesNotContain("   \"") }
+    }
+
+    @Test
+    fun `a missing body field is a 422 Required`() {
+        postBody("""{"count":1}""").expectViolation("#/name", "Required")
+    }
+
+    @Test
+    fun `a wrongly typed body field is a 422 TypeMismatch`() {
+        postBody("""{"name":"x","count":"seven"}""").expectViolation("#/count", "TypeMismatch")
+    }
+
+    @Test
+    fun `a body that is not JSON is a 400 with no errors`() {
+        postBody("{")
+            .expectProblem(400, "bad-request")
+            .jsonPath("$.errors")
+            .doesNotExist()
+    }
+
+    @Test
+    fun `query parameter failures are 422`() {
+        fun get(uri: String) =
+            client
+                .get()
+                .uri(uri)
+                .header(HttpHeaders.AUTHORIZATION, bearer())
+                .exchange()
+        get("/api/v1/test-failures/query?size=11").expectViolation("#/size", "Max")
+        get("/api/v1/test-failures/query?size=abc").expectViolation("#/size", "TypeMismatch")
+        get("/api/v1/test-failures/query").expectViolation("#/size", "Required")
+    }
+
+    @Test
+    fun `header failures are 422`() {
+        client
+            .get()
+            .uri("/api/v1/test-failures/header")
+            .header(HttpHeaders.AUTHORIZATION, bearer())
+            .header("X-Thing", "toolong")
+            .exchange()
+            .expectProblem(422, "unprocessable-entity")
+            .jsonPath("$.errors[0].code")
+            .isEqualTo("Size")
+        client
+            .get()
+            .uri("/api/v1/test-failures/header")
+            .header(HttpHeaders.AUTHORIZATION, bearer())
+            .exchange()
+            .expectViolation("#/X-Thing", "Required")
+    }
+
+    @Test
+    fun `with method validation, a body is still reported field by field and a header by its name`() {
+        client
+            .post()
+            .uri("/api/v1/test-method-validation/body")
+            .header(HttpHeaders.AUTHORIZATION, bearer())
+            .header("X-Thing", "toolong")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("""{"name":" ","count":1}""")
+            .exchange()
+            .expectProblem(422, "unprocessable-entity")
+            .jsonPath("$.errors[?(@.pointer == '#/name')].code")
+            .isEqualTo("NotBlank")
+            .jsonPath("$.errors[?(@.pointer == '#/X-Thing')].code")
+            .isEqualTo("Size")
+    }
+
+    @Test
+    fun `a path id that is not a UUID is a 400 with no errors`() {
+        client
+            .get()
+            .uri("/api/v1/test-failures/things/abc")
+            .header(HttpHeaders.AUTHORIZATION, bearer())
+            .exchange()
+            .expectProblem(400, "bad-request")
+            .jsonPath("$.errors")
+            .doesNotExist()
     }
 
     @Test

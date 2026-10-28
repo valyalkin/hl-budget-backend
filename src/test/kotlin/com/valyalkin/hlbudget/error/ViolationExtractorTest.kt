@@ -10,9 +10,12 @@ import org.springframework.validation.FieldError
 import org.springframework.validation.ObjectError
 import tools.jackson.databind.DeserializationFeature
 import tools.jackson.databind.ObjectMapper
+import tools.jackson.databind.cfg.CoercionAction
+import tools.jackson.databind.cfg.CoercionInputShape
 import tools.jackson.databind.exc.MismatchedInputException
 import tools.jackson.databind.exc.UnrecognizedPropertyException
 import tools.jackson.databind.json.JsonMapper
+import tools.jackson.databind.type.LogicalType
 import tools.jackson.module.kotlin.KotlinModule
 
 /**
@@ -41,7 +44,10 @@ class ViolationExtractorTest {
             .builder()
             .addModule(KotlinModule.Builder().build())
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-            .build()
+            .withCoercionConfig(LogicalType.Textual) { config ->
+                config.setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+                config.setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
+            }.build()
 
     @Test
     fun `a field error becomes a pointer, a field, a code and a message`() {
@@ -154,6 +160,31 @@ class ViolationExtractorTest {
             assertThat(it.pointer).isEqualTo("#/lines/0/quantity")
             assertThat(it.message).contains("must be a valid")
             assertThat(it.message).doesNotContain("abc")
+        })
+    }
+
+    @Test
+    fun `a JSON number for a string field is a TypeMismatch, not a silent coercion`() {
+        val failure =
+            runCatching { mapper.readValue("""{"reference":84.37,"lines":[]}""", Order::class.java) }
+                .exceptionOrNull()
+
+        assertThat(extractor.fromJacksonFailure(failure)).singleElement().satisfies({
+            assertThat(it.code).isEqualTo("TypeMismatch")
+            assertThat(it.pointer).isEqualTo("#/reference")
+            assertThat(it.message).doesNotContain("84.37")
+        })
+    }
+
+    @Test
+    fun `an object where a string belongs is a TypeMismatch on that field`() {
+        val failure =
+            runCatching { mapper.readValue("""{"reference":{},"lines":[]}""", Order::class.java) }
+                .exceptionOrNull()
+
+        assertThat(extractor.fromJacksonFailure(failure)).singleElement().satisfies({
+            assertThat(it.code).isEqualTo("TypeMismatch")
+            assertThat(it.pointer).isEqualTo("#/reference")
         })
     }
 

@@ -14,6 +14,12 @@ security:
 tags:
 - name: Users
   description: The signed-in user's own record
+- name: Accounts
+  description: Where the caller's money was paid from
+- name: Categories
+  description: "What the caller's money was spent on, including the 17 defaults"
+- name: Spendings
+  description: The caller's spending transactions
 - name: Operations
   description: Unversioned probes for the platform (not routed through the ingress)
 paths:
@@ -104,6 +110,602 @@ paths:
                   $ref: "#/components/examples/ProfileFirstVisit"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/spendings/{spendingId}:
+    get:
+      tags:
+      - Spendings
+      summary: Fetch one of the caller's spendings
+      operationId: getSpending
+      parameters:
+      - name: spendingId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: The spending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Spending"
+              examples:
+                found:
+                  description: found
+                  value:
+                    id: 8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66
+                    date: 2026-10-20
+                    merchant: Loblaws
+                    amount:
+                      amount: "84.37"
+                      currency: CAD
+                    category:
+                      id: 2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
+                      name: Groceries
+                    account:
+                      id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                      name: Amex
+                    createdAt: 2026-10-27T14:03:11Z
+                    updatedAt: 2026-10-27T14:03:11Z
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      tags:
+      - Spendings
+      summary: Replace all details of a spending
+      operationId: updateSpending
+      parameters:
+      - name: spendingId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpendingRequest"
+        required: true
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Spending"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConcurrentModification"
+        "422":
+          $ref: "#/components/responses/SpendingValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags:
+      - Spendings
+      summary: Delete a spending permanently
+      operationId: deleteSpending
+      parameters:
+      - name: spendingId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/categories/{categoryId}:
+    get:
+      tags:
+      - Categories
+      summary: Fetch one of the caller's categories
+      operationId: getCategory
+      parameters:
+      - name: categoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: The category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      tags:
+      - Categories
+      summary: Rename a custom category
+      description: "Default categories cannot be renamed: 422 with `details.reason\
+        \ = default-category`."
+      operationId: renameCategory
+      parameters:
+      - name: categoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameRequest"
+        required: true
+      responses:
+        "200":
+          description: Renamed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/DuplicateNameOrConcurrent"
+        "422":
+          $ref: "#/components/responses/ValidationOrDefaultCategory"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags:
+      - Categories
+      summary: Delete a custom category that no spending uses
+      description: "Default categories cannot be deleted: 422 with `details.reason\
+        \ = default-category`."
+      operationId: deleteCategory
+      parameters:
+      - name: categoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/InUse"
+        "422":
+          $ref: "#/components/responses/DefaultCategory"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/accounts/{accountId}:
+    get:
+      tags:
+      - Accounts
+      summary: Fetch one of the caller's accounts
+      operationId: getAccount
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      tags:
+      - Accounts
+      summary: Rename an account (its name is its only field)
+      operationId: renameAccount
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameRequest"
+        required: true
+      responses:
+        "200":
+          description: Renamed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/DuplicateNameOrConcurrent"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags:
+      - Accounts
+      summary: Delete an account that no spending uses
+      operationId: deleteAccount
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/InUse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/spendings:
+    get:
+      tags:
+      - Spendings
+      summary: "List the caller's spendings, paged, filtered and sorted"
+      description: "Filters are optional and combine with AND; repeating `categoryId`\
+        \ or `accountId` matches any of the given ids. Ties in the sort order are\
+        \ broken by creation time in the same direction, then by id, so paging never\
+        \ skips or repeats a spending."
+      operationId: listSpendings
+      parameters:
+      - name: from
+        in: query
+        description: "Earliest date, inclusive"
+        required: false
+        schema:
+          type: string
+          format: date
+        example: 2026-10-01
+      - name: to
+        in: query
+        description: "Latest date, inclusive; must not be before `from`"
+        required: false
+        schema:
+          type: string
+          format: date
+        example: 2026-10-31
+      - name: categoryId
+        in: query
+        description: Repeatable; matches any of the given categories
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+      - name: accountId
+        in: query
+        description: Repeatable; matches any of the given accounts
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+      - name: page
+        in: query
+        description: 0-based page number
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: "Items per page, 1 to 100"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+          maximum: 100
+          minimum: 1
+      - name: sort
+        in: query
+        description: Sort order
+        required: false
+        schema:
+          type: string
+          default: "date,desc"
+          enum:
+          - "date,desc"
+          - "date,asc"
+          - "amount,desc"
+          - "amount,asc"
+      responses:
+        "200":
+          description: One page; `items` is empty when nothing matches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpendingPage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags:
+      - Spendings
+      summary: Record a spending
+      description: "Send an `Idempotency-Key` to make retries safe: repeating a create\
+        \ with the same key and the same body returns the first spending with 200\
+        \ and `Idempotent-Replayed: true` instead of creating another. The key is\
+        \ freed when that spending is deleted."
+      operationId: createSpending
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: "Optional. 1 to 255 visible ASCII characters, unique per create\
+          \ you want deduplicated"
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+          minLength: 1
+          pattern: "^[\\x21-\\x7E]+$"
+        example: 5d1f0c2e-retry-safe
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpendingRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Spending"
+              examples:
+                created:
+                  description: created
+                  value:
+                    id: 8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66
+                    date: 2026-10-20
+                    merchant: Loblaws
+                    amount:
+                      amount: "84.37"
+                      currency: CAD
+                    category:
+                      id: 2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
+                      name: Groceries
+                    account:
+                      id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                      name: Amex
+                    createdAt: 2026-10-27T14:03:11Z
+                    updatedAt: 2026-10-27T14:03:11Z
+        "200":
+          description: A replay of an earlier create with the same Idempotency-Key
+            and body; nothing new was created
+          headers:
+            Idempotent-Replayed:
+              description: Always `true` on a replay
+              style: simple
+              schema:
+                type: string
+                enum:
+                - "true"
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Spending"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/SpendingValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/categories:
+    get:
+      tags:
+      - Categories
+      summary: "List all of the caller's categories, sorted by name, with spending\
+        \ counts"
+      description: "On the caller's first budgeting call the 17 default categories\
+        \ are created for them, exactly once, so this never returns an empty list.\
+        \ Not paged: a person has tens of categories."
+      operationId: listCategories
+      responses:
+        "200":
+          description: All categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags:
+      - Categories
+      summary: Create a custom category
+      operationId: createCategory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameRequest"
+        required: true
+      responses:
+        "201":
+          description: Created; `isDefault` is always false
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/DuplicateName"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/accounts:
+    get:
+      tags:
+      - Accounts
+      summary: "List all of the caller's accounts, sorted by name, with spending counts"
+      description: "Not paged: a person has tens of accounts. A new user has none."
+      operationId: listAccounts
+      responses:
+        "200":
+          description: All accounts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags:
+      - Accounts
+      summary: Create an account
+      operationId: createAccount
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/DuplicateName"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
         "500":
           $ref: "#/components/responses/InternalError"
         "503":
@@ -241,6 +843,219 @@ components:
       - firstSeenAt
       - id
       - lastSeenAt
+    Money:
+      type: object
+      description: An exact amount and its currency
+      properties:
+        amount:
+          type: string
+          description: "Exact decimal as a string, greater than 0. Responses always\
+            \ carry 2 decimals"
+          example: "84.37"
+          pattern: "^\\d{1,8}(\\.\\d{1,2})?$"
+        currency:
+          type: string
+          description: ISO 4217 code. Must be the app's configured currency
+          example: CAD
+          pattern: "^[A-Z]{3}$"
+      required:
+      - amount
+      - currency
+    SpendingRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          description: "Today or earlier, in the app's time zone"
+          example: 2026-10-20
+        merchant:
+          type: string
+          example: Loblaws
+          maxLength: 255
+          minLength: 0
+        amount:
+          $ref: "#/components/schemas/Money"
+        categoryId:
+          type: string
+          format: uuid
+          description: One of the caller's categories
+          example: 2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
+        accountId:
+          type: string
+          format: uuid
+          description: One of the caller's accounts
+          example: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+      required:
+      - accountId
+      - amount
+      - categoryId
+      - date
+      - merchant
+    Ref:
+      type: object
+      description: Another resource's id and current name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Groceries
+      required:
+      - id
+      - name
+    Spending:
+      type: object
+      description: One of the caller's spendings
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66
+        date:
+          type: string
+          format: date
+          example: 2026-10-20
+        merchant:
+          type: string
+          example: Loblaws
+        amount:
+          $ref: "#/components/schemas/Money"
+        category:
+          $ref: "#/components/schemas/Ref"
+        account:
+          $ref: "#/components/schemas/Ref"
+        createdAt:
+          type: string
+          format: date-time
+          example: 2026-10-27T14:03:11Z
+        updatedAt:
+          type: string
+          format: date-time
+          example: 2026-10-27T14:03:11Z
+      required:
+      - account
+      - amount
+      - category
+      - createdAt
+      - date
+      - id
+      - merchant
+      - updatedAt
+    NameRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Trimmed before use; unique per user ignoring case
+          example: Amex
+          maxLength: 50
+          minLength: 0
+      required:
+      - name
+    Category:
+      type: object
+      description: What the caller's money was spent on
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
+        name:
+          type: string
+          example: Groceries
+          maxLength: 50
+        spendingCount:
+          type: integer
+          format: int64
+          description: How many of the caller's spendings use this category
+          minimum: 0
+          readOnly: true
+        isDefault:
+          type: boolean
+          description: True for the 17 categories every user starts with; they cannot
+            be renamed or deleted
+          readOnly: true
+      required:
+      - id
+      - isDefault
+      - name
+      - spendingCount
+    Account:
+      type: object
+      description: Where the caller's money was paid from
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+        name:
+          type: string
+          example: Amex
+          maxLength: 50
+        spendingCount:
+          type: integer
+          format: int64
+          description: How many of the caller's spendings use this account
+          minimum: 0
+          readOnly: true
+      required:
+      - id
+      - name
+      - spendingCount
+    SpendingPage:
+      type: object
+      description: One page of the caller's spendings; `items` is empty when nothing
+        matches
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Spending"
+        page:
+          type: integer
+          format: int32
+          description: 0-based page number
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 1
+        totalItems:
+          type: integer
+          format: int64
+          description: "Spendings matching the filters, across all pages"
+        totalPages:
+          type: integer
+          format: int32
+      required:
+      - items
+      - page
+      - size
+      - totalItems
+      - totalPages
+    CategoryList:
+      type: object
+      description: "All of the caller's categories, sorted by name (never paged)"
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+      required:
+      - items
+    AccountList:
+      type: object
+      description: "All of the caller's accounts, sorted by name (never paged)"
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
+      required:
+      - items
   responses:
     Unauthenticated:
       description: "Missing, malformed, expired, wrongly signed, wrong-issuer or wrong-audience\
@@ -298,6 +1113,281 @@ components:
             instance: /api/v1/users/me
             timestamp: 2026-10-25T09:15:00Z
             traceId: 4be0baf6ee174255
+    BadRequest:
+      description: "The request cannot be read: the body is not JSON, or a path id\
+        \ is not a UUID"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            malformed:
+              value:
+                type: urn:problem:hl-budget:bad-request
+                title: Bad Request
+                status: 400
+                detail: The path segment spendingId must be a valid UUID.
+                instance: /api/v1/spendings/abc
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+    NotFound:
+      description: "No such resource for the caller. Also returned for another user's\
+        \ resource, so existence is never revealed"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            notFound:
+              value:
+                type: urn:problem:hl-budget:not-found
+                title: Not Found
+                status: 404
+                detail: Spending 8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66 was not found
+                instance: /api/v1/spendings/8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  resource: spending
+                  spendingId: 8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66
+    DuplicateName:
+      description: "Another of the caller's accounts or categories already has this\
+        \ name, ignoring case (`details.reason = duplicate-name`)"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            duplicateName:
+              value:
+                type: urn:problem:hl-budget:conflict
+                title: Conflict
+                status: 409
+                detail: An account named "amex" already exists
+                instance: /api/v1/accounts
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: duplicate-name
+                  name: amex
+    DuplicateNameOrConcurrent:
+      description: '`details.reason` is `duplicate-name` or `concurrent-modification`
+        (re-read and retry)'
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            duplicateName:
+              value:
+                type: urn:problem:hl-budget:conflict
+                title: Conflict
+                status: 409
+                detail: An account named "amex" already exists
+                instance: /api/v1/accounts
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: duplicate-name
+                  name: amex
+            concurrent:
+              value:
+                type: urn:problem:hl-budget:conflict
+                title: Conflict
+                status: 409
+                detail: The resource was modified concurrently. Re-read it and retry.
+                instance: /api/v1/accounts/3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: concurrent-modification
+    ConcurrentModification:
+      description: Lost a concurrent write; re-read and retry
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            concurrent:
+              value:
+                type: urn:problem:hl-budget:conflict
+                title: Conflict
+                status: 409
+                detail: The resource was modified concurrently. Re-read it and retry.
+                instance: /api/v1/accounts/3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: concurrent-modification
+    InUse:
+      description: "Spendings still use this account or category; move or delete them\
+        \ first (`details.reason = in-use`, `details.spendingCount`)"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            inUse:
+              value:
+                type: urn:problem:hl-budget:conflict
+                title: Conflict
+                status: 409
+                detail: Account 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11 is used by 2
+                  spendings
+                instance: /api/v1/accounts/3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: in-use
+                  spendingCount: 2
+    DefaultCategory:
+      description: Default categories cannot be renamed or deleted (`details.reason
+        = default-category`)
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            defaultCategory:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: Groceries is a default category and cannot be changed
+                instance: /api/v1/categories/2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: default-category
+    ValidationFailed:
+      description: One or more fields or parameters are invalid; each one is listed
+        in `errors` with a JSON Pointer and a stable `code`
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            invalid:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "1 field is invalid: name"
+                instance: /api/v1/accounts
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/name"
+                  field: name
+                  code: NotBlank
+                  message: must not be blank
+    ValidationOrDefaultCategory:
+      description: "An invalid field (`errors`), or the category is a default (`details.reason\
+        \ = default-category`)"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            invalid:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "1 field is invalid: name"
+                instance: /api/v1/accounts
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/name"
+                  field: name
+                  code: NotBlank
+                  message: must not be blank
+            defaultCategory:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: Groceries is a default category and cannot be changed
+                instance: /api/v1/categories/2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: default-category
+    SpendingValidationFailed:
+      description: "Invalid fields, each listed in `errors`. Codes include Required,\
+        \ TypeMismatch, NotBlank, Size, Pattern, Positive, UnsupportedCurrency, NotFuture\
+        \ and NotFound (an unknown or another user's category or account). On create\
+        \ only, `details.reason = idempotency-key-reused` when the Idempotency-Key\
+        \ was already used for a different spending"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            invalid:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "3 fields are invalid: date, amount.amount, categoryId"
+                instance: /api/v1/spendings
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/date"
+                  field: date
+                  code: NotFuture
+                  message: must be today or earlier
+                - pointer: "#/amount/amount"
+                  field: amount.amount
+                  code: Positive
+                  message: must be greater than 0
+                - pointer: "#/categoryId"
+                  field: categoryId
+                  code: NotFound
+                  message: is not one of your categories
+            keyReused:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: The Idempotency-Key was already used for a different spending
+                instance: /api/v1/spendings
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: idempotency-key-reused
   examples:
     ProfileFirstVisit:
       summary: First call creates the record
@@ -324,6 +1414,11 @@ components:
       schema:
         type: string
         example: 4be0baf6ee174255
+    Location:
+      description: Address of the resource
+      schema:
+        type: string
+        example: /api/v1/spendings/8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66
   securitySchemes:
     bearerAuth:
       type: http

@@ -50,6 +50,10 @@ hlbudget:
     audience: ${HLBUDGET_AUTH_AUDIENCE:}
     jwk-set-uri: ${HLBUDGET_AUTH_JWKSETURI:}
     claims-namespace: ${HLBUDGET_AUTH_CLAIMSNAMESPACE:}
+  # Required, no default (research R-006): a wrong currency would be baked into every amount.
+  money:
+    currency: ${HLBUDGET_MONEY_CURRENCY:}
+  time-zone: ${HLBUDGET_TIMEZONE:}
 
 # Probes on the main port at the homelab paths (research R-008). Liveness checks nothing;
 # readiness fails while Postgres is unreachable. No details or components are disclosed.
