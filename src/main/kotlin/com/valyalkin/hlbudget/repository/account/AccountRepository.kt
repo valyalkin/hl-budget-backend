@@ -48,13 +48,16 @@ interface AccountRepository : JpaRepository<AccountEntity, UUID> {
     ): Boolean
 
     /**
+     * Locks every one of the caller's accounts, in id order so two deletes cannot deadlock.
      * `FOR UPDATE`, not JPA's PESSIMISTIC_WRITE (which Postgres runs as `FOR NO KEY UPDATE`): it
-     * waits for any transaction inserting a spending against this account, so the in-use count
-     * read next is final (research R-005).
+     * also waits for any transaction inserting a spending against these accounts, so the in-use
+     * count read next is final (research R-005 of feature 002). Held
+     * until the end of the transaction, it makes "is this the last account?" final: a concurrent
+     * delete of another of the caller's accounts waits here (research R-006).
      */
-    @Query(value = "SELECT * FROM accounts WHERE id = :id AND user_id = :userId FOR UPDATE", nativeQuery = true)
-    fun lockByIdAndUserId(
-        id: UUID,
-        userId: UUID,
-    ): AccountEntity?
+    @Query(
+        value = "SELECT * FROM accounts WHERE user_id = :userId ORDER BY id FOR UPDATE",
+        nativeQuery = true,
+    )
+    fun lockAllByUserId(userId: UUID): List<AccountEntity>
 }

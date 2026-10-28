@@ -6,6 +6,7 @@ import com.valyalkin.hlbudget.error.UnprocessableEntityException
 import com.valyalkin.hlbudget.error.ValidationException
 import com.valyalkin.hlbudget.model.SpendingCommand
 import com.valyalkin.hlbudget.model.VerifiedIdentity
+import com.valyalkin.hlbudget.repository.NamedItemInserts
 import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.category.CategoryEntity
@@ -42,7 +43,9 @@ class SpendingServiceTest {
     private val inserts = mockk<SpendingInserts>()
     private val categories = mockk<CategoryRepository>()
     private val accounts = mockk<AccountRepository>()
-    private val service = SpendingService(currentUser, spendings, inserts, categories, accounts, rules, clock)
+    private val namedInserts = mockk<NamedItemInserts>()
+    private val names = NamedItemResolver(categories, accounts, namedInserts, clock)
+    private val service = SpendingService(currentUser, spendings, inserts, categories, accounts, rules, names, clock)
 
     private val identity = VerifiedIdentity("auth0|alice", null, null, null)
     private val userId = UUID.randomUUID()
@@ -110,7 +113,7 @@ class SpendingServiceTest {
 
     @Test
     fun `the same key with the same body replays the stored spending`() {
-        val existing = stored("k1", rules.fingerprint(command))
+        val existing = stored("k1", rules.fingerprint(command, category.id, account.id))
         every { spendings.findByUserIdAndIdempotencyKey(userId, "k1") } returns existing
 
         val result = service.create(identity, command, "k1")
@@ -131,7 +134,7 @@ class SpendingServiceTest {
 
     @Test
     fun `losing the race for a key replays the winner`() {
-        val winner = stored("k1", rules.fingerprint(command))
+        val winner = stored("k1", rules.fingerprint(command, category.id, account.id))
         every { spendings.findByUserIdAndIdempotencyKey(userId, "k1") } returnsMany listOf(null, winner)
         every { inserts.insertUnlessKeyTaken(any()) } returns false
 

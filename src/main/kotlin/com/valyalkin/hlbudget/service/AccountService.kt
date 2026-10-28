@@ -14,7 +14,10 @@ import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 
-/** The caller's accounts (US2). Every lookup is scoped to the caller; anyone else's is not found. */
+/**
+ * The caller's accounts (US2). Every lookup is scoped to the caller; anyone else's is not found.
+ * The caller's only account cannot be deleted (feature 003, FR-086).
+ */
 @Service
 @Transactional(readOnly = true)
 class AccountService(
@@ -71,8 +74,7 @@ class AccountService(
         id: UUID,
     ) {
         val userId = currentUser.resolve(identity)
-        val account = accounts.lockByIdAndUserId(id, userId) ?: throw notFound(RESOURCE, id)
-        requireUnused(userId, id)
+        val account = deletable(userId, id)
         try {
             accounts.delete(account)
             accounts.flush()
@@ -81,6 +83,21 @@ class AccountService(
             // the transaction cannot count again. At least one spending uses the account.
             throw inUse(RESOURCE, id, 1, exception)
         }
+    }
+
+    /**
+     * The account, once it is known that it can go: it is the caller's, no spending uses it, and it
+     * is not their only account (FR-086). The lock on all their accounts makes both checks final.
+     */
+    private fun deletable(
+        userId: UUID,
+        id: UUID,
+    ): AccountEntity {
+        val owned = accounts.lockAllByUserId(userId)
+        val account = owned.firstOrNull { it.id == id } ?: throw notFound(RESOURCE, id)
+        requireUnused(userId, id)
+        if (owned.size == 1) throw lastAccount(id)
+        return account
     }
 
     private fun owned(

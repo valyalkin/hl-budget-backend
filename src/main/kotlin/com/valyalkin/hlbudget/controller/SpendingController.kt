@@ -124,7 +124,7 @@ class SpendingController(
         description =
             "Send an `Idempotency-Key` to make retries safe: repeating a create with the same key and the " +
                 "same body returns the first spending with 200 and `Idempotent-Replayed: true` instead of " +
-                "creating another. The key is freed when that spending is deleted.",
+                "creating another. The key is freed when that spending is deleted. " + BY_NAME,
     )
     @ApiResponse(
         responseCode = "201",
@@ -208,7 +208,7 @@ class SpendingController(
     ): SpendingResponse = spendings.get(identity, spendingId).toResponse()
 
     @PutMapping("/{spendingId}", consumes = [MediaType.APPLICATION_JSON_VALUE])
-    @Operation(operationId = "updateSpending", summary = "Replace all details of a spending")
+    @Operation(operationId = "updateSpending", summary = "Replace all details of a spending", description = BY_NAME)
     @ApiResponse(
         responseCode = "200",
         description = "Updated",
@@ -251,6 +251,10 @@ class SpendingController(
         private const val UNAUTHENTICATED = "#/components/responses/Unauthenticated"
         private const val INTERNAL = "#/components/responses/InternalError"
         private const val UNAVAILABLE = "#/components/responses/ServiceUnavailable"
+        private const val BY_NAME =
+            "The category and the account are each given by id or by name (exactly one of each pair). A name " +
+                "is matched against the caller's items ignoring case and surrounding spaces, and created in the " +
+                "same transaction when none matches; if the spending is refused, nothing is created."
         private const val SPENDING_EXAMPLE =
             """{"id":"8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66","date":"2026-10-20","merchant":"Loblaws",""" +
                 """"amount":{"amount":"84.37","currency":"CAD"},""" +

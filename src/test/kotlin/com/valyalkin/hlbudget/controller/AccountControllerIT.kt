@@ -119,10 +119,11 @@ class AccountControllerIT : AbstractIntegrationTest() {
     @Test
     fun `delete removes an unused account, and a second delete is not found`() {
         val cash = createAccount(alice, "Cash")
+        createAccount(alice, "Amex") // the last account cannot be deleted (LastAccountIT)
 
         delete(alice, "$base/$cash").expectStatus().isNoContent()
         delete(alice, "$base/$cash").expectStatus().isNotFound()
-        assertThat(names(alice)).isEmpty()
+        assertThat(names(alice)).containsExactly("Amex")
     }
 
     @Test

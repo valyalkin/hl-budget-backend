@@ -77,12 +77,21 @@ class SpendingRulesTest {
 
     @Test
     fun `the fingerprint ignores the amount's scale and is stable`() {
-        val fingerprint = rules.fingerprint(command(amount = "84.3"))
+        val fingerprint = rules.fingerprint(command(amount = "84.3"), category, account)
 
         assertThat(fingerprint).matches("[0-9a-f]{64}")
-        assertThat(rules.fingerprint(command(amount = "84.30"))).isEqualTo(fingerprint)
-        assertThat(rules.fingerprint(command(amount = "84.31"))).isNotEqualTo(fingerprint)
-        assertThat(rules.fingerprint(command(merchant = "Metro"))).isNotEqualTo(fingerprint)
-        assertThat(rules.fingerprint(command(date = "2026-10-26"))).isNotEqualTo(fingerprint)
+        assertThat(rules.fingerprint(command(amount = "84.30"), category, account)).isEqualTo(fingerprint)
+        assertThat(rules.fingerprint(command(amount = "84.31"), category, account)).isNotEqualTo(fingerprint)
+        assertThat(rules.fingerprint(command(merchant = "Metro"), category, account)).isNotEqualTo(fingerprint)
+        assertThat(rules.fingerprint(command(date = "2026-10-26"), category, account)).isNotEqualTo(fingerprint)
+    }
+
+    @Test
+    fun `the fingerprint covers the resolved category and account`() {
+        val fingerprint = rules.fingerprint(command(), category, account)
+
+        assertThat(rules.fingerprint(command(), account, category)).isNotEqualTo(fingerprint)
+        assertThat(rules.fingerprint(command().copy(categoryName = "Coffee"), category, account))
+            .isEqualTo(fingerprint)
     }
 }

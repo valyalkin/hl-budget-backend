@@ -10,6 +10,7 @@ import java.time.Clock
 import java.time.LocalDate
 import java.util.Currency
 import java.util.HexFormat
+import java.util.UUID
 
 /**
  * The spending rules that need the clock or configuration, so Bean Validation cannot check them
@@ -46,16 +47,23 @@ class SpendingRules(
             }
         }
 
-    /** SHA-256 of the normalised command, so `"84.3"` and `"84.30"` count as the same request. */
-    fun fingerprint(command: SpendingCommand): String {
+    /**
+     * SHA-256 of the normalised command, so `"84.3"` and `"84.30"` count as the same request. The
+     * category and account are the resolved ids, whether the request named them or gave ids.
+     */
+    fun fingerprint(
+        command: SpendingCommand,
+        categoryId: UUID,
+        accountId: UUID,
+    ): String {
         val normalised =
             listOf(
                 command.date,
                 command.merchant.trim(),
                 command.amount.setScale(2, RoundingMode.UNNECESSARY).toPlainString(),
                 command.currency,
-                command.categoryId,
-                command.accountId,
+                categoryId,
+                accountId,
             ).joinToString("|")
         val digest = MessageDigest.getInstance("SHA-256").digest(normalised.toByteArray(Charsets.UTF_8))
         return HexFormat.of().formatHex(digest)
