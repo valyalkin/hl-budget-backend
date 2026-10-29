@@ -72,7 +72,7 @@ class OpenApiExportIT : AbstractIntegrationTest() {
             .exists()
             // Only the contract's paths: no framework endpoints, no Spring ProblemDetail schema.
             .jsonPath("$.paths.length()")
-            .isEqualTo(9)
+            .isEqualTo(12)
             .jsonPath("$.components.schemas.ProblemDetail")
             .doesNotExist()
     }
@@ -85,7 +85,7 @@ class OpenApiExportIT : AbstractIntegrationTest() {
             "put /api/v1/accounts/{accountId}" to
                 ("renameAccount" to listOf(200, 400, 401, 404, 409, 422, 500, 503)),
             "delete /api/v1/accounts/{accountId}" to
-                ("deleteAccount" to listOf(204, 400, 401, 404, 409, 500, 503)),
+                ("deleteAccount" to listOf(204, 400, 401, 404, 409, 422, 500, 503)),
             "get /api/v1/categories" to ("listCategories" to listOf(200, 401, 500, 503)),
             "post /api/v1/categories" to ("createCategory" to listOf(201, 400, 401, 409, 422, 500, 503)),
             "get /api/v1/categories/{categoryId}" to ("getCategory" to listOf(200, 400, 401, 404, 500, 503)),
@@ -100,10 +100,13 @@ class OpenApiExportIT : AbstractIntegrationTest() {
                 ("updateSpending" to listOf(200, 400, 401, 404, 409, 422, 500, 503)),
             "delete /api/v1/spendings/{spendingId}" to
                 ("deleteSpending" to listOf(204, 400, 401, 404, 500, 503)),
+            "get /api/v1/monthly-totals" to ("listMonthlyTotals" to listOf(200, 401, 422, 500, 503)),
+            "get /api/v1/category-totals" to ("listCategoryTotals" to listOf(200, 401, 422, 500, 503)),
+            "get /api/v1/merchants" to ("listMerchants" to listOf(200, 401, 422, 500, 503)),
         )
 
     @Test
-    fun `every feature 002 operation documents exactly its outcomes`() {
+    fun `every feature 002 and 003 operation documents exactly its outcomes`() {
         var document = emptyMap<String, Any>()
         client
             .get()

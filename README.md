@@ -35,6 +35,9 @@ message naming it. The local profile defaults the currency to `CAD` and the time
 | `http://localhost:8080/api/v1/accounts` | `GET`, `POST`; `/{id}`: `GET`, `PUT` (rename), `DELETE` |
 | `http://localhost:8080/api/v1/categories` | `GET` (the 17 defaults + your own), `POST`; `/{id}`: `GET`, `PUT`, `DELETE` |
 | `http://localhost:8080/api/v1/spendings` | `GET` (paged, filtered, sorted), `POST`; `/{id}`: `GET`, `PUT`, `DELETE` |
+| `http://localhost:8080/api/v1/monthly-totals?year=2026` | `GET`: total and count for each of the 12 months, plus `today` |
+| `http://localhost:8080/api/v1/category-totals?from=…&to=…` | `GET`: total per category with spending in the range |
+| `http://localhost:8080/api/v1/merchants` | `GET`: past merchants, most used first, with their latest category and account |
 | `http://localhost:8080/api/swagger-ui.html` | Swagger UI |
 | `http://localhost:8080/api/v3/api-docs.yaml` | The OpenAPI document |
 
@@ -73,6 +76,19 @@ so a controller change ships as: code + regenerated `contracts/api.yaml` here, t
 - **Status codes**: 400 means the request cannot be read (not JSON, or a path id that is not a
   UUID). 422 means fix these fields, and every one is listed in `errors` with a JSON Pointer and a
   `code`. 404 is also the answer for another user's item.
+
+## Spending screens (feature 003)
+
+- **Totals** come from the server, summed in Postgres on exact `numeric`: `monthly-totals` always
+  returns 12 months (zeros included) and `today` in the app's time zone; `category-totals` returns
+  only categories with spending, largest first. Totals use `MoneyTotal`, which may be zero.
+- **Merchants** are derived from spendings, not stored: spellings equal ignoring case and spaces
+  count as one merchant. `limit` is 1–1000 (default 500); `truncated` says whether more exist.
+- **By name**: a spending may give `categoryName`/`accountName` instead of the id (exactly one of
+  each pair). A name reuses the caller's item ignoring case or creates it in the same transaction;
+  a refused spending creates nothing.
+- **The last account cannot be deleted** (422 `details.reason = last-account`), checked after
+  in use (409).
 
 ## Configuration
 

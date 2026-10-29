@@ -37,6 +37,7 @@ class SpendingService(
     private val categories: CategoryRepository,
     private val accounts: AccountRepository,
     private val rules: SpendingRules,
+    private val names: NamedItemResolver,
     private val clock: Clock,
 ) {
     /**
@@ -51,7 +52,8 @@ class SpendingService(
     ): CreateResult {
         val userId = currentUser.resolve(identity)
         val refs = references(userId, command)
-        val fingerprint = idempotencyKey?.let { rules.fingerprint(command) }
+        // Over the resolved ids, so a retry that names "coffee" matches the first request (R-004).
+        val fingerprint = idempotencyKey?.let { rules.fingerprint(command, refs.first.id, refs.second.id) }
         if (idempotencyKey != null && fingerprint != null) {
             spendings.findByUserIdAndIdempotencyKey(userId, idempotencyKey)?.let {
                 return replay(it, fingerprint, userId)
@@ -64,8 +66,8 @@ class SpendingService(
                 date = command.date,
                 merchant = command.merchant,
                 amount = command.amount,
-                categoryId = command.categoryId,
-                accountId = command.accountId,
+                categoryId = refs.first.id,
+                accountId = refs.second.id,
                 idempotencyKey = idempotencyKey,
                 idempotencyFingerprint = fingerprint,
                 createdAt = now,
@@ -103,8 +105,8 @@ class SpendingService(
         spending.date = command.date
         spending.merchant = command.merchant
         spending.amount = command.amount
-        spending.categoryId = command.categoryId
-        spending.accountId = command.accountId
+        spending.categoryId = category.id
+        spending.accountId = account.id
         spending.updatedAt = Instant.now(clock)
         return spendings.saveAndFlush(spending).toModel(category, account, rules.currency)
     }
@@ -167,24 +169,13 @@ class SpendingService(
 
     /**
      * Every rule at once (FR-005): the date, amount and currency rules, and that the category and
-     * account are the caller's own. Another user's id gets the same answer as an unknown one.
+     * account are the caller's own, given by id or by name. Another user's id gets the same answer
+     * as an unknown one. A name is reused or created only when everything else is valid.
      */
     private fun references(
         userId: UUID,
         command: SpendingCommand,
-    ): Pair<Ref, Ref> {
-        val violations = rules.violations(command).toMutableList()
-        val category = categories.findByIdAndUserId(command.categoryId, userId)
-        val account = accounts.findByIdAndUserId(command.accountId, userId)
-        if (category == null) {
-            violations += FieldViolation("#/categoryId", "categoryId", "NotFound", "is not one of your categories")
-        }
-        if (account == null) {
-            violations += FieldViolation("#/accountId", "accountId", "NotFound", "is not one of your accounts")
-        }
-        if (violations.isNotEmpty() || category == null || account == null) throw ValidationException(violations)
-        return Ref(category.id, category.name) to Ref(account.id, account.name)
-    }
+    ): Pair<Ref, Ref> = names.resolve(userId, command, rules.violations(command))
 
     private fun replay(
         existing: SpendingEntity,

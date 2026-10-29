@@ -3,6 +3,7 @@ package com.valyalkin.hlbudget.service
 import com.valyalkin.hlbudget.error.ConflictException
 import com.valyalkin.hlbudget.error.DuplicateException
 import com.valyalkin.hlbudget.error.NotFoundException
+import com.valyalkin.hlbudget.error.UnprocessableEntityException
 import com.valyalkin.hlbudget.model.NameCommand
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.account.AccountEntity
@@ -108,7 +109,7 @@ class AccountServiceTest {
     fun `get, rename and delete of a missing or foreign id are not found`() {
         every { accounts.findWithCount(userId, accountId) } returns null
         every { accounts.findByIdAndUserId(accountId, userId) } returns null
-        every { accounts.lockByIdAndUserId(accountId, userId) } returns null
+        every { accounts.lockAllByUserId(userId) } returns listOf(other())
 
         assertThatThrownBy { service.get(identity, accountId) }
             .isInstanceOf(NotFoundException::class.java)
@@ -120,7 +121,7 @@ class AccountServiceTest {
 
     @Test
     fun `delete is refused while spendings use the account, and nothing is deleted`() {
-        every { accounts.lockByIdAndUserId(accountId, userId) } returns entity()
+        every { accounts.lockAllByUserId(userId) } returns listOf(entity(), other())
         every { spendings.countByUserIdAndAccountId(userId, accountId) } returns 2
 
         assertThatThrownBy { service.delete(identity, accountId) }
@@ -132,7 +133,7 @@ class AccountServiceTest {
     @Test
     fun `a foreign key failure on delete is reported as in use too`() {
         val existing = entity()
-        every { accounts.lockByIdAndUserId(accountId, userId) } returns existing
+        every { accounts.lockAllByUserId(userId) } returns listOf(existing, other())
         every { spendings.countByUserIdAndAccountId(userId, accountId) } returns 0
         every { accounts.flush() } throws DataIntegrityViolationException("fk_spendings_account")
 
@@ -144,7 +145,7 @@ class AccountServiceTest {
     @Test
     fun `an unused account is deleted`() {
         val existing = entity()
-        every { accounts.lockByIdAndUserId(accountId, userId) } returns existing
+        every { accounts.lockAllByUserId(userId) } returns listOf(existing, other())
         every { spendings.countByUserIdAndAccountId(userId, accountId) } returns 0
 
         service.delete(identity, accountId)
@@ -158,4 +159,23 @@ class AccountServiceTest {
 
         assertThat(service.list(identity)).singleElement().satisfies({ assertThat(it.spendingCount).isEqualTo(1) })
     }
+
+    @Test
+    fun `the caller's only account is not deleted, but only once it is known to be unused`() {
+        val existing = entity()
+        every { accounts.lockAllByUserId(userId) } returns listOf(existing)
+        every { spendings.countByUserIdAndAccountId(userId, accountId) } returns 0
+
+        assertThatThrownBy { service.delete(identity, accountId) }
+            .isInstanceOf(UnprocessableEntityException::class.java)
+            .hasFieldOrPropertyWithValue("details", mapOf("reason" to "last-account"))
+        verify(exactly = 0) { accounts.delete(any()) }
+
+        every { spendings.countByUserIdAndAccountId(userId, accountId) } returns 3
+        assertThatThrownBy { service.delete(identity, accountId) }
+            .isInstanceOf(ConflictException::class.java)
+            .hasFieldOrPropertyWithValue("details", mapOf("reason" to "in-use", "spendingCount" to 3L))
+    }
+
+    private fun other() = AccountEntity(UUID.randomUUID(), userId, "Cash", now, now, 0)
 }

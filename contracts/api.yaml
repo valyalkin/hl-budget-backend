@@ -20,6 +20,10 @@ tags:
   description: "What the caller's money was spent on, including the 17 defaults"
 - name: Spendings
   description: The caller's spending transactions
+- name: Totals
+  description: Sums of the caller's spendings by month and by category
+- name: Merchants
+  description: "Merchants derived from the caller's spendings, for autofill"
 - name: Operations
   description: Unversioned probes for the platform (not routed through the ingress)
 paths:
@@ -166,6 +170,10 @@ paths:
       tags:
       - Spendings
       summary: Replace all details of a spending
+      description: "The category and the account are each given by id or by name (exactly\
+        \ one of each pair). A name is matched against the caller's items ignoring\
+        \ case and surrounding spaces, and created in the same transaction when none\
+        \ matches; if the spending is refused, nothing is created."
       operationId: updateSpending
       parameters:
       - name: spendingId
@@ -401,6 +409,8 @@ paths:
       tags:
       - Accounts
       summary: Delete an account that no spending uses
+      description: "Refused in this order: not found (404), used by spendings (409\
+        \ `in-use`), the caller's only account (422 `last-account`)."
       operationId: deleteAccount
       parameters:
       - name: accountId
@@ -420,6 +430,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/InUse"
+        "422":
+          $ref: "#/components/responses/LastAccount"
         "500":
           $ref: "#/components/responses/InternalError"
         "503":
@@ -522,7 +534,11 @@ paths:
       description: "Send an `Idempotency-Key` to make retries safe: repeating a create\
         \ with the same key and the same body returns the first spending with 200\
         \ and `Idempotent-Replayed: true` instead of creating another. The key is\
-        \ freed when that spending is deleted."
+        \ freed when that spending is deleted. The category and the account are each\
+        \ given by id or by name (exactly one of each pair). A name is matched against\
+        \ the caller's items ignoring case and surrounding spaces, and created in\
+        \ the same transaction when none matches; if the spending is refused, nothing\
+        \ is created."
       operationId: createSpending
       parameters:
       - name: Idempotency-Key
@@ -710,6 +726,182 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/monthly-totals:
+    get:
+      tags:
+      - Totals
+      summary: The caller's spending total and count for each month of a year
+      description: "Always 12 entries, January to December; a month with no spendings\
+        \ has a zero total and count. `today` is the current date in the app's time\
+        \ zone, so clients can tell which months are in the future without a clock\
+        \ of their own."
+      operationId: listMonthlyTotals
+      parameters:
+      - name: year
+        in: query
+        description: "Calendar year, 2000 to 2100; defaults to the current year"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 2100
+          minimum: 2000
+        example: 2026
+      responses:
+        "200":
+          description: Twelve months
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyTotals"
+              examples:
+                year:
+                  description: year
+                  value:
+                    year: 2026
+                    today: 2026-10-28
+                    months:
+                    - month: 2026-01
+                      total:
+                        amount: "0.00"
+                        currency: CAD
+                      spendingCount: 0
+                    - month: 2026-09
+                      total:
+                        amount: "2741.10"
+                        currency: CAD
+                      spendingCount: 22
+                    - month: 2026-10
+                      total:
+                        amount: "2748.42"
+                        currency: CAD
+                      spendingCount: 14
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/merchants:
+    get:
+      tags:
+      - Merchants
+      summary: "The caller's past merchants, most used first, for autofill"
+      description: "Merchants are derived from spendings, not stored: spendings whose\
+        \ merchant is equal ignoring letter case and surrounding spaces count as one\
+        \ merchant. `name`, `lastCategory` and `lastAccount` come from that merchant's\
+        \ most recent spending. Ordered by `spendingCount` descending, then name."
+      operationId: listMerchants
+      parameters:
+      - name: limit
+        in: query
+        description: "Maximum number of merchants returned, 1 to 1000"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 500
+          maximum: 1000
+          minimum: 1
+      responses:
+        "200":
+          description: Merchants; `truncated` is true when more exist than `limit`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantList"
+              examples:
+                merchants:
+                  description: merchants
+                  value:
+                    truncated: false
+                    items:
+                    - name: Neighbourhood Market
+                      spendingCount: 12
+                      lastUsedOn: 2026-10-27
+                      lastCategory:
+                        id: 2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
+                        name: Groceries
+                      lastAccount:
+                        id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                        name: Visa
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/category-totals:
+    get:
+      tags:
+      - Totals
+      summary: The caller's spending per category over a date range
+      description: "One entry per category with at least one spending in the range,\
+        \ and only those; largest total first, ties by category name. Not paged: bounded\
+        \ by the caller's category count."
+      operationId: listCategoryTotals
+      parameters:
+      - name: from
+        in: query
+        description: "Earliest date, inclusive"
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-10-01
+      - name: to
+        in: query
+        description: "Latest date, inclusive; not before `from`, at most 366 days\
+          \ after it"
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-10-31
+      responses:
+        "200":
+          description: Totals per category; `items` is empty when nothing was spent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryTotals"
+              examples:
+                october:
+                  description: october
+                  value:
+                    from: 2026-10-01
+                    to: 2026-10-31
+                    total:
+                      amount: "2326.44"
+                      currency: CAD
+                    spendingCount: 3
+                    items:
+                    - category:
+                        id: 5b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d44
+                        name: Rent
+                      total:
+                        amount: "2150.00"
+                        currency: CAD
+                      spendingCount: 1
+                    - category:
+                        id: 2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
+                        name: Groceries
+                      total:
+                        amount: "176.44"
+                        currency: CAD
+                      spendingCount: 2
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   schemas:
     Problem:
@@ -877,19 +1069,41 @@ components:
         amount:
           $ref: "#/components/schemas/Money"
         categoryId:
-          type: string
+          type:
+          - string
+          - "null"
           format: uuid
-          description: One of the caller's categories
+          description: One of the caller's categories. Give exactly one of categoryId
+            and categoryName
           example: 2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
         accountId:
-          type: string
+          type:
+          - string
+          - "null"
           format: uuid
-          description: One of the caller's accounts
+          description: One of the caller's accounts. Give exactly one of accountId
+            and accountName
           example: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+        categoryName:
+          type:
+          - string
+          - "null"
+          description: "Instead of categoryId: matched against the caller's categories\
+            \ ignoring case and surrounding spaces, and created when none matches"
+          example: Coffee
+          maxLength: 50
+          minLength: 0
+        accountName:
+          type:
+          - string
+          - "null"
+          description: "Instead of accountId: matched against the caller's accounts\
+            \ ignoring case and surrounding spaces, and created when none matches"
+          example: Visa
+          maxLength: 50
+          minLength: 0
       required:
-      - accountId
       - amount
-      - categoryId
       - date
       - merchant
     Ref:
@@ -1036,6 +1250,155 @@ components:
       - size
       - totalItems
       - totalPages
+    MoneyTotal:
+      type: object
+      description: A sum of amounts. Unlike Money it may be zero and has no 8-digit
+        cap. Always 2 decimals
+      properties:
+        amount:
+          type: string
+          example: "2748.42"
+          pattern: "^\\d+\\.\\d{2}$"
+        currency:
+          type: string
+          description: "ISO 4217 code: the app's configured currency"
+          example: CAD
+          pattern: "^[A-Z]{3}$"
+      required:
+      - amount
+      - currency
+    MonthTotal:
+      type: object
+      description: One month's total; zero when nothing was spent
+      properties:
+        month:
+          type: string
+          example: 2026-10
+          pattern: "^\\d{4}-\\d{2}$"
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        spendingCount:
+          type: integer
+          format: int64
+          example: 14
+          minimum: 0
+      required:
+      - month
+      - spendingCount
+      - total
+    MonthlyTotals:
+      type: object
+      description: "Every month of a year, January to December"
+      properties:
+        year:
+          type: integer
+          format: int32
+          example: 2026
+        today:
+          type: string
+          format: date
+          description: Today in the app's time zone
+          example: 2026-10-28
+        months:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthTotal"
+          maxItems: 12
+          minItems: 12
+      required:
+      - months
+      - today
+      - year
+    Merchant:
+      type: object
+      description: A merchant derived from the caller's spendings
+      properties:
+        name:
+          type: string
+          description: Spelling on the most recent spending
+          example: Neighbourhood Market
+        spendingCount:
+          type: integer
+          format: int64
+          example: 12
+          minimum: 1
+        lastUsedOn:
+          type: string
+          format: date
+          example: 2026-10-27
+        lastCategory:
+          $ref: "#/components/schemas/Ref"
+          description: Category of the most recent spending
+        lastAccount:
+          $ref: "#/components/schemas/Ref"
+          description: Account of the most recent spending
+      required:
+      - lastAccount
+      - lastCategory
+      - lastUsedOn
+      - name
+      - spendingCount
+    MerchantList:
+      type: object
+      description: "The caller's merchants, most used first"
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Merchant"
+        truncated:
+          type: boolean
+          description: True when the caller has more merchants than `limit`
+      required:
+      - items
+      - truncated
+    CategoryTotal:
+      type: object
+      description: One category's spending in the range
+      properties:
+        category:
+          $ref: "#/components/schemas/Ref"
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        spendingCount:
+          type: integer
+          format: int64
+          example: 2
+          minimum: 1
+      required:
+      - category
+      - spendingCount
+      - total
+    CategoryTotals:
+      type: object
+      description: "Spending per category over a date range: only categories with\
+        \ spending, largest first"
+      properties:
+        from:
+          type: string
+          format: date
+          example: 2026-10-01
+        to:
+          type: string
+          format: date
+          example: 2026-10-31
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        spendingCount:
+          type: integer
+          format: int64
+          example: 14
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryTotal"
+      required:
+      - from
+      - items
+      - spendingCount
+      - to
+      - total
     CategoryList:
       type: object
       description: "All of the caller's categories, sorted by name (never paged)"
@@ -1258,6 +1621,28 @@ components:
                 details:
                   reason: in-use
                   spendingCount: 2
+    LastAccount:
+      description: The caller's only account cannot be deleted; add another account
+        first (`details.reason = last-account`)
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            lastAccount:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: Account 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11 is the only account
+                instance: /api/v1/accounts/3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: last-account
     DefaultCategory:
       description: Default categories cannot be renamed or deleted (`details.reason
         = default-category`)
@@ -1343,9 +1728,10 @@ components:
                   reason: default-category
     SpendingValidationFailed:
       description: "Invalid fields, each listed in `errors`. Codes include Required,\
-        \ TypeMismatch, NotBlank, Size, Pattern, Positive, UnsupportedCurrency, NotFuture\
-        \ and NotFound (an unknown or another user's category or account). On create\
-        \ only, `details.reason = idempotency-key-reused` when the Idempotency-Key\
+        \ TypeMismatch, NotBlank, Size, Pattern, Positive, UnsupportedCurrency, NotFuture,\
+        \ NotFound (an unknown or another user's category or account) and ExactlyOne\
+        \ (give exactly one of categoryId and categoryName, and of accountId and accountName).\
+        \ On create only, `details.reason = idempotency-key-reused` when the Idempotency-Key\
         \ was already used for a different spending"
       headers:
         X-Request-Id:

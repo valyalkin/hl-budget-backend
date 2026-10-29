@@ -3,6 +3,7 @@ package com.valyalkin.hlbudget.service
 import com.valyalkin.hlbudget.error.ConflictException
 import com.valyalkin.hlbudget.error.DuplicateException
 import com.valyalkin.hlbudget.error.NotFoundException
+import com.valyalkin.hlbudget.error.UnprocessableEntityException
 import org.springframework.dao.DataIntegrityViolationException
 import java.util.UUID
 
@@ -38,6 +39,13 @@ internal fun inUse(
     mapOf("reason" to "in-use", "spendingCount" to count),
     cause,
 )
+
+/** The caller's only account cannot be deleted (feature 003, FR-086, research R-006). */
+internal fun lastAccount(id: UUID) =
+    UnprocessableEntityException(
+        "Account $id is the only account",
+        mapOf("reason" to "last-account"),
+    )
 
 /** A lost race on the case-insensitive unique index gets the same answer as the pre-check. */
 internal fun <T> saveOrDuplicate(

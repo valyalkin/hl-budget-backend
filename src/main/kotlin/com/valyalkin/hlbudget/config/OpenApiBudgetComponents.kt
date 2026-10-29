@@ -31,6 +31,7 @@ internal object OpenApiBudgetComponents {
     const val VALIDATION_FAILED = "#/components/responses/ValidationFailed"
     const val VALIDATION_OR_DEFAULT_CATEGORY = "#/components/responses/ValidationOrDefaultCategory"
     const val SPENDING_VALIDATION_FAILED = "#/components/responses/SpendingValidationFailed"
+    const val LAST_ACCOUNT = "#/components/responses/LastAccount"
     const val LOCATION_HEADER_REF = "#/components/headers/Location"
 
     private const val BAD = 400
@@ -135,6 +136,18 @@ internal object OpenApiBudgetComponents {
 
     private fun validationResponses(): Map<String, ApiResponse> =
         mapOf(
+            "LastAccount" to
+                response(
+                    "The caller's only account cannot be deleted; add another account first " +
+                        "(`details.reason = last-account`)",
+                    "lastAccount" to
+                        problem(
+                            UNPROCESSABLE,
+                            "Account $ACCOUNT_ID is the only account",
+                            "/api/v1/accounts/$ACCOUNT_ID",
+                            details = mapOf("reason" to "last-account"),
+                        ),
+                ),
             "DefaultCategory" to
                 response(
                     "Default categories cannot be renamed or deleted (`details.reason = default-category`)",
@@ -155,9 +168,11 @@ internal object OpenApiBudgetComponents {
             "SpendingValidationFailed" to
                 response(
                     "Invalid fields, each listed in `errors`. Codes include Required, TypeMismatch, NotBlank, Size, " +
-                        "Pattern, Positive, UnsupportedCurrency, NotFuture and NotFound (an unknown or another " +
-                        "user's category or account). On create only, `details.reason = idempotency-key-reused` " +
-                        "when the Idempotency-Key was already used for a different spending",
+                        "Pattern, Positive, UnsupportedCurrency, NotFuture, NotFound (an unknown or another " +
+                        "user's category or account) and ExactlyOne (give exactly one of categoryId and " +
+                        "categoryName, and of accountId and accountName). On create only, " +
+                        "`details.reason = idempotency-key-reused` when the Idempotency-Key was already used " +
+                        "for a different spending",
                     "invalid" to spendingInvalid,
                     "keyReused" to
                         problem(

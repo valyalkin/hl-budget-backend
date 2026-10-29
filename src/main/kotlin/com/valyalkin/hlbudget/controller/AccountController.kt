@@ -122,12 +122,19 @@ class AccountController(
 
     @DeleteMapping("/{accountId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(operationId = "deleteAccount", summary = "Delete an account that no spending uses")
+    @Operation(
+        operationId = "deleteAccount",
+        summary = "Delete an account that no spending uses",
+        description =
+            "Refused in this order: not found (404), used by spendings (409 `in-use`), the caller's only " +
+                "account (422 `last-account`).",
+    )
     @ApiResponse(responseCode = "204", description = "Deleted")
     @ApiResponse(responseCode = "400", ref = OpenApiBudgetComponents.BAD_REQUEST)
     @ApiResponse(responseCode = "401", ref = UNAUTHENTICATED)
     @ApiResponse(responseCode = "404", ref = OpenApiBudgetComponents.NOT_FOUND)
     @ApiResponse(responseCode = "409", ref = OpenApiBudgetComponents.IN_USE)
+    @ApiResponse(responseCode = "422", ref = OpenApiBudgetComponents.LAST_ACCOUNT)
     @ApiResponse(responseCode = "500", ref = INTERNAL)
     @ApiResponse(responseCode = "503", ref = UNAVAILABLE)
     fun deleteAccount(

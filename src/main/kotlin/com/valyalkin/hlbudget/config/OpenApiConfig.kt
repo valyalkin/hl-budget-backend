@@ -36,6 +36,10 @@ class OpenApiConfig {
                         .name(TAG_CATEGORIES)
                         .description("What the caller's money was spent on, including the 17 defaults"),
                     Tag().name(TAG_SPENDINGS).description("The caller's spending transactions"),
+                    Tag().name(TAG_TOTALS).description("Sums of the caller's spendings by month and by category"),
+                    Tag()
+                        .name(TAG_MERCHANTS)
+                        .description("Merchants derived from the caller's spendings, for autofill"),
                     Tag()
                         .name(TAG_OPERATIONS)
                         .description("Unversioned probes for the platform (not routed through the ingress)"),
@@ -65,7 +69,23 @@ class OpenApiConfig {
 
     companion object {
         private val FULLY_REQUIRED_SCHEMAS =
-            setOf("Account", "AccountList", "Category", "CategoryList", "Spending", "SpendingPage", "Money", "Ref")
+            setOf(
+                "Account",
+                "AccountList",
+                "Category",
+                "CategoryList",
+                "Spending",
+                "SpendingPage",
+                "Money",
+                "Ref",
+                "MoneyTotal",
+                "MonthTotal",
+                "MonthlyTotals",
+                "CategoryTotal",
+                "CategoryTotals",
+                "Merchant",
+                "MerchantList",
+            )
 
         const val BEARER_SCHEME = "bearerAuth"
         const val TAG_USERS = "Users"
@@ -73,6 +93,8 @@ class OpenApiConfig {
         const val TAG_ACCOUNTS = "Accounts"
         const val TAG_CATEGORIES = "Categories"
         const val TAG_SPENDINGS = "Spendings"
+        const val TAG_TOTALS = "Totals"
+        const val TAG_MERCHANTS = "Merchants"
         const val PROBLEM_SCHEMA = "Problem"
         const val FIELD_VIOLATION_SCHEMA = "FieldViolation"
         const val HEALTH_SCHEMA = "HealthStatus"
