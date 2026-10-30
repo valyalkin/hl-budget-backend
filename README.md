@@ -38,6 +38,7 @@ message naming it. The local profile defaults the currency to `CAD` and the time
 | `http://localhost:8080/api/v1/monthly-totals?year=2026` | `GET`: total and count for each of the 12 months, plus `today` |
 | `http://localhost:8080/api/v1/category-totals?from=…&to=…` | `GET`: total per category with spending in the range |
 | `http://localhost:8080/api/v1/merchants` | `GET`: past merchants, most used first, with their latest category and account |
+| `http://localhost:8080/api/v1/spending-imports` | `POST`: 1–1000 spendings at once, all or nothing; `/{id}`: `GET` the import's receipt |
 | `http://localhost:8080/api/swagger-ui.html` | Swagger UI |
 | `http://localhost:8080/api/v3/api-docs.yaml` | The OpenAPI document |
 
@@ -89,6 +90,21 @@ so a controller change ships as: code + regenerated `contracts/api.yaml` here, t
   a refused spending creates nothing.
 - **The last account cannot be deleted** (422 `details.reason = last-account`), checked after
   in use (409).
+
+## CSV import (feature 004)
+
+- **`POST /api/v1/spending-imports`** creates 1–1000 spendings in one transaction. Categories and
+  accounts are given by name (`categoryName`, `accountName`); each distinct name, ignoring case
+  and surrounding spaces, is found or created once. Rows may be in any month.
+- **All or nothing**: every invalid field of every row is reported in one 422, its pointer naming
+  the row (`#/spendings/3/date`), and nothing is created, not even new names.
+- **Idempotency**: with an `Idempotency-Key`, repeating the same rows returns the first import
+  (200, `Idempotent-Replayed: true`); the same key with other rows is 422
+  `details.reason = idempotency-key-reused`.
+- **Receipt**: migration V4 adds `spending_imports` (counts, first and last date, total, key and
+  fingerprint), readable at `GET /api/v1/spending-imports/{id}` by its owner only. It stores
+  nothing from the file, and the imported spendings stay ordinary spendings.
+- The CSV file itself is parsed in the browser; this service only ever sees the reviewed rows.
 
 ## Configuration
 

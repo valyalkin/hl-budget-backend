@@ -32,6 +32,7 @@ internal object OpenApiBudgetComponents {
     const val VALIDATION_OR_DEFAULT_CATEGORY = "#/components/responses/ValidationOrDefaultCategory"
     const val SPENDING_VALIDATION_FAILED = "#/components/responses/SpendingValidationFailed"
     const val LAST_ACCOUNT = "#/components/responses/LastAccount"
+    const val SPENDING_IMPORT_VALIDATION_FAILED = "#/components/responses/SpendingImportValidationFailed"
     const val LOCATION_HEADER_REF = "#/components/headers/Location"
 
     private const val BAD = 400
@@ -40,6 +41,7 @@ internal object OpenApiBudgetComponents {
     private const val UNPROCESSABLE = 422
     private const val SPENDING_ID = "8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66"
     private const val ACCOUNT_ID = "3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11"
+    private const val IMPORTS_PATH = "/api/v1/spending-imports"
 
     private val nameInvalid =
         problem(
@@ -77,7 +79,7 @@ internal object OpenApiBudgetComponents {
                 .description("Address of the resource")
                 .schema(StringSchema().example("/api/v1/spendings/8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66")),
         )
-        (protocolResponses() + conflictResponses() + validationResponses())
+        (protocolResponses() + conflictResponses() + validationResponses() + importResponses())
             .forEach { (name, response) -> components.addResponses(name, response) }
         return components
     }
@@ -179,6 +181,54 @@ internal object OpenApiBudgetComponents {
                             UNPROCESSABLE,
                             "The Idempotency-Key was already used for a different spending",
                             "/api/v1/spendings",
+                            details = mapOf("reason" to "idempotency-key-reused"),
+                        ),
+                ),
+        )
+
+    private fun importResponses(): Map<String, ApiResponse> =
+        mapOf(
+            "SpendingImportValidationFailed" to
+                response(
+                    "Nothing was created. Every invalid field of every row is listed in `errors`, its pointer " +
+                        "naming the row by its 0-based position (`#/spendings/3/amount/amount`). Codes are those of " +
+                        "SpendingRequest (Required, TypeMismatch, NotBlank, Size, Pattern, Positive, " +
+                        "UnsupportedCurrency, NotFuture), plus Size on `#/spendings` for 0 or more than 1000 rows. " +
+                        "`details.reason = idempotency-key-reused` when the Idempotency-Key was already used for " +
+                        "different rows",
+                    "invalidRows" to
+                        problem(
+                            UNPROCESSABLE,
+                            "2 fields are invalid: spendings[1].date, spendings[4].amount.amount",
+                            IMPORTS_PATH,
+                            errors =
+                                listOf(
+                                    violation(
+                                        "#/spendings/1/date",
+                                        "spendings[1].date",
+                                        "NotFuture",
+                                        "must be today or earlier",
+                                    ),
+                                    violation(
+                                        "#/spendings/4/amount/amount",
+                                        "spendings[4].amount.amount",
+                                        "Positive",
+                                        "must be greater than 0",
+                                    ),
+                                ),
+                        ),
+                    "tooMany" to
+                        problem(
+                            UNPROCESSABLE,
+                            "1 field is invalid: spendings",
+                            IMPORTS_PATH,
+                            errors = listOf(violation("#/spendings", "spendings", "Size", "must have 1 to 1000 rows")),
+                        ),
+                    "keyReused" to
+                        problem(
+                            UNPROCESSABLE,
+                            "The Idempotency-Key was already used for a different import",
+                            IMPORTS_PATH,
                             details = mapOf("reason" to "idempotency-key-reused"),
                         ),
                 ),

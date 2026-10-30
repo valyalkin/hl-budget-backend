@@ -1,6 +1,7 @@
 package com.valyalkin.hlbudget.service
 
 import com.valyalkin.hlbudget.config.HlBudgetProperties
+import com.valyalkin.hlbudget.model.ImportRowCommand
 import com.valyalkin.hlbudget.model.SpendingCommand
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -93,5 +94,59 @@ class SpendingRulesTest {
         assertThat(rules.fingerprint(command(), account, category)).isNotEqualTo(fingerprint)
         assertThat(rules.fingerprint(command().copy(categoryName = "Coffee"), category, account))
             .isEqualTo(fingerprint)
+    }
+
+    private fun row(
+        date: String = "2026-10-27",
+        amount: String = "84.37",
+        currency: String = "CAD",
+        category: String = "Groceries",
+        account: String = "Visa",
+    ) = ImportRowCommand(LocalDate.parse(date), "Loblaws", BigDecimal(amount), currency, category, account)
+
+    @Test
+    fun `an import row's problems point into its own row`() {
+        val violations = rules.violations(row(date = "2026-10-28", amount = "0", currency = "EUR"), index = 3)
+
+        assertThat(violations).extracting<String> { it.pointer }.containsExactly(
+            "#/spendings/3/date",
+            "#/spendings/3/amount/amount",
+            "#/spendings/3/amount/currency",
+        )
+        assertThat(violations).extracting<String> { it.field }.containsExactly(
+            "spendings[3].date",
+            "spendings[3].amount.amount",
+            "spendings[3].amount.currency",
+        )
+        assertThat(rules.violations(row(), index = 0)).isEmpty()
+    }
+
+    @Test
+    fun `a single spending keeps its unprefixed pointers`() {
+        assertThat(rules.violations(command(date = "2026-10-28")).single().pointer).isEqualTo("#/date")
+    }
+
+    @Test
+    fun `the import fingerprint ignores name case, spaces and the amount's scale`() {
+        val fingerprint = rules.importFingerprint(listOf(row(amount = "84.3"), row(date = "2026-10-01")))
+
+        assertThat(fingerprint).matches("[0-9a-f]{64}")
+        assertThat(
+            rules.importFingerprint(
+                listOf(row(amount = "84.30", category = " groceries ", account = "VISA"), row(date = "2026-10-01")),
+            ),
+        ).isEqualTo(fingerprint)
+    }
+
+    @Test
+    fun `the import fingerprint depends on the rows and their order`() {
+        val first = row()
+        val second = row(date = "2026-10-01")
+        val fingerprint = rules.importFingerprint(listOf(first, second))
+
+        assertThat(rules.importFingerprint(listOf(second, first))).isNotEqualTo(fingerprint)
+        assertThat(rules.importFingerprint(listOf(first))).isNotEqualTo(fingerprint)
+        assertThat(rules.importFingerprint(listOf(first, row(date = "2026-10-01", account = "Amex"))))
+            .isNotEqualTo(fingerprint)
     }
 }
