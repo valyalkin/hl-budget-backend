@@ -22,6 +22,8 @@ tags:
   description: The caller's spending transactions
 - name: Totals
   description: Sums of the caller's spendings by month and by category
+- name: Spending imports
+  description: "Adding many spendings at once, all or nothing"
 - name: Merchants
   description: "Merchants derived from the caller's spendings, for autofill"
 - name: Operations
@@ -615,6 +617,117 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/spending-imports:
+    post:
+      tags:
+      - Spending imports
+      summary: "Record many spendings at once, all or nothing"
+      description: |-
+        Creates every row as a spending in one step. If any row is invalid, nothing is created and every problem is listed, with a JSON Pointer naming the row (`#/spendings/3/date`).
+
+        Categories and accounts are given by name. Each name is matched against the caller's items ignoring case and surrounding spaces, and created when none matches. A name that appears in several rows, in any letter case, creates one item.
+
+        Send an `Idempotency-Key` to make retries safe: repeating an import with the same key and the same rows returns the first import with 200 and `Idempotent-Replayed: true` instead of creating the spendings again.
+      operationId: createSpendingImport
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Optional. 1 to 255 visible ASCII characters; a UUID is recommended
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+          minLength: 1
+          pattern: "^[\\x21-\\x7E]+$"
+        example: 6a1d9c2e-8f4b-4b7a-9e3c-1f2d3c4b5a69
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpendingImportRequest"
+            examples:
+              twoRows:
+                description: twoRows
+                value:
+                  spendings:
+                  - date: 2026-10-28
+                    merchant: Corner Bakery
+                    amount:
+                      amount: "12.40"
+                      currency: CAD
+                    categoryName: Groceries
+                    accountName: Visa
+                  - date: 2026-09-30
+                    merchant: "Lakeshore Fuel, Hwy 7"
+                    amount:
+                      amount: "61.20"
+                      currency: CAD
+                    categoryName: car
+                    accountName: Amex
+        required: true
+      responses:
+        "201":
+          description: Created; every row is now a spending
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpendingImport"
+              examples:
+                created:
+                  description: created
+                  value:
+                    id: 9b2f6e1a-4c3d-4e5f-8a7b-0c1d2e3f4a5b
+                    spendingCount: 2
+                    firstDate: 2026-09-30
+                    lastDate: 2026-10-28
+                    total:
+                      amount: "73.60"
+                      currency: CAD
+                    createdAt: 2026-10-29T14:03:11Z
+        "200":
+          description: A replay of an earlier import with the same Idempotency-Key
+            and rows; nothing new was created
+          headers:
+            Idempotent-Replayed:
+              description: Always `true` on a replay
+              style: simple
+              schema:
+                type: string
+                enum:
+                - "true"
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpendingImport"
+              examples:
+                replayed:
+                  description: replayed
+                  value:
+                    id: 9b2f6e1a-4c3d-4e5f-8a7b-0c1d2e3f4a5b
+                    spendingCount: 2
+                    firstDate: 2026-09-30
+                    lastDate: 2026-10-28
+                    total:
+                      amount: "73.60"
+                      currency: CAD
+                    createdAt: 2026-10-29T14:03:11Z
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/SpendingImportValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/categories:
     get:
       tags:
@@ -722,6 +835,52 @@ paths:
           $ref: "#/components/responses/DuplicateName"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/spending-imports/{importId}:
+    get:
+      tags:
+      - Spending imports
+      summary: One of the caller's imports
+      description: "The summary recorded when the import was created. It does not\
+        \ change when the imported spendings are later edited or deleted. Another\
+        \ user's import is 404, like an unknown id."
+      operationId: getSpendingImport
+      parameters:
+      - name: importId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 9b2f6e1a-4c3d-4e5f-8a7b-0c1d2e3f4a5b
+      responses:
+        "200":
+          description: The import
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpendingImport"
+              examples:
+                found:
+                  description: found
+                  value:
+                    id: 9b2f6e1a-4c3d-4e5f-8a7b-0c1d2e3f4a5b
+                    spendingCount: 2
+                    firstDate: 2026-09-30
+                    lastDate: 2026-10-28
+                    total:
+                      amount: "73.60"
+                      currency: CAD
+                    createdAt: 2026-10-29T14:03:11Z
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
         "503":
@@ -1218,6 +1377,105 @@ components:
       - id
       - name
       - spendingCount
+    SpendingImportRequest:
+      type: object
+      description: "The rows to import, in the order the user reviewed them"
+      properties:
+        spendings:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpendingImportRow"
+          maxItems: 1000
+          minItems: 1
+      required:
+      - spendings
+    SpendingImportRow:
+      type: object
+      description: "One spending. The same rules as SpendingRequest, with category\
+        \ and account by name"
+      properties:
+        date:
+          type: string
+          format: date
+          description: "Today or earlier, in the app's time zone"
+          example: 2026-10-28
+        merchant:
+          type: string
+          example: Corner Bakery
+          maxLength: 255
+          minLength: 0
+        amount:
+          $ref: "#/components/schemas/Money"
+        categoryName:
+          type: string
+          description: Matched against the caller's categories ignoring case and surrounding
+            spaces; created when none matches
+          example: Groceries
+          maxLength: 50
+          minLength: 0
+        accountName:
+          type: string
+          description: Matched against the caller's accounts ignoring case and surrounding
+            spaces; created when none matches
+          example: Visa
+          maxLength: 50
+          minLength: 0
+      required:
+      - accountName
+      - amount
+      - categoryName
+      - date
+      - merchant
+    MoneyTotal:
+      type: object
+      description: A sum of amounts. Unlike Money it may be zero and has no 8-digit
+        cap. Always 2 decimals
+      properties:
+        amount:
+          type: string
+          example: "2748.42"
+          pattern: "^\\d+\\.\\d{2}$"
+        currency:
+          type: string
+          description: "ISO 4217 code: the app's configured currency"
+          example: CAD
+          pattern: "^[A-Z]{3}$"
+      required:
+      - amount
+      - currency
+    SpendingImport:
+      type: object
+      description: The receipt of a completed import. Holds nothing from the imported
+        file
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 9b2f6e1a-4c3d-4e5f-8a7b-0c1d2e3f4a5b
+        spendingCount:
+          type: integer
+          format: int32
+          description: How many spendings were created
+          example: 2
+          maximum: 1000
+          minimum: 1
+        firstDate:
+          type: string
+          format: date
+          description: The earliest spending date in the import
+          example: 2026-09-30
+        lastDate:
+          type: string
+          format: date
+          description: The latest spending date in the import; clients show this month
+            afterwards
+          example: 2026-10-28
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        createdAt:
+          type: string
+          format: date-time
+          example: 2026-10-29T14:03:11Z
     SpendingPage:
       type: object
       description: One page of the caller's spendings; `items` is empty when nothing
@@ -1250,23 +1508,6 @@ components:
       - size
       - totalItems
       - totalPages
-    MoneyTotal:
-      type: object
-      description: A sum of amounts. Unlike Money it may be zero and has no 8-digit
-        cap. Always 2 decimals
-      properties:
-        amount:
-          type: string
-          example: "2748.42"
-          pattern: "^\\d+\\.\\d{2}$"
-        currency:
-          type: string
-          description: "ISO 4217 code: the app's configured currency"
-          example: CAD
-          pattern: "^[A-Z]{3}$"
-      required:
-      - amount
-      - currency
     MonthTotal:
       type: object
       description: One month's total; zero when nothing was spent
@@ -1770,6 +2011,64 @@ components:
                 status: 422
                 detail: The Idempotency-Key was already used for a different spending
                 instance: /api/v1/spendings
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: idempotency-key-reused
+    SpendingImportValidationFailed:
+      description: "Nothing was created. Every invalid field of every row is listed\
+        \ in `errors`, its pointer naming the row by its 0-based position (`#/spendings/3/amount/amount`).\
+        \ Codes are those of SpendingRequest (Required, TypeMismatch, NotBlank, Size,\
+        \ Pattern, Positive, UnsupportedCurrency, NotFuture), plus Size on `#/spendings`\
+        \ for 0 or more than 1000 rows. `details.reason = idempotency-key-reused`\
+        \ when the Idempotency-Key was already used for different rows"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            invalidRows:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "2 fields are invalid: spendings[1].date, spendings[4].amount.amount"
+                instance: /api/v1/spending-imports
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/spendings/1/date"
+                  field: "spendings[1].date"
+                  code: NotFuture
+                  message: must be today or earlier
+                - pointer: "#/spendings/4/amount/amount"
+                  field: "spendings[4].amount.amount"
+                  code: Positive
+                  message: must be greater than 0
+            tooMany:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "1 field is invalid: spendings"
+                instance: /api/v1/spending-imports
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/spendings"
+                  field: spendings
+                  code: Size
+                  message: must have 1 to 1000 rows
+            keyReused:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: The Idempotency-Key was already used for a different import
+                instance: /api/v1/spending-imports
                 timestamp: 2026-10-27T14:03:11Z
                 traceId: 4be0baf6ee174255
                 details:

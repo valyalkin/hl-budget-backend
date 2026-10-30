@@ -13,13 +13,13 @@ import java.util.UUID
  */
 class SchemaValidationIT : AbstractIntegrationTest() {
     @Test
-    fun `V1 to V3 applied cleanly`() {
+    fun `V1 to V4 applied cleanly`() {
         val applied =
             jdbcTemplate.queryForList(
                 "SELECT version, success FROM flyway_schema_history ORDER BY installed_rank",
             )
 
-        assertThat(applied.map { it["version"] }).containsExactly("1", "2", "3")
+        assertThat(applied.map { it["version"] }).containsExactly("1", "2", "3", "4")
         assertThat(applied).allSatisfy({ assertThat(it["success"]).isEqualTo(true) })
     }
 
@@ -144,6 +144,27 @@ class SchemaValidationIT : AbstractIntegrationTest() {
             key,
             fingerprint,
         )
+
+    @Test
+    fun `spending_imports has the feature 004 data-model columns`() {
+        val imports = columnsOf("spending_imports")
+        assertThat(imports.keys).containsExactlyInAnyOrder(
+            "id",
+            "user_id",
+            "idempotency_key",
+            "idempotency_fingerprint",
+            "spending_count",
+            "first_date",
+            "last_date",
+            "total",
+            "created_at",
+        )
+        assertThat(imports.getValue("total")["numeric_precision"]).isEqualTo(14)
+        assertThat(imports.getValue("total")["numeric_scale"]).isEqualTo(2)
+        assertThat(imports.getValue("idempotency_key")["is_nullable"]).isEqualTo("YES")
+        assertThat(imports.getValue("idempotency_fingerprint")["character_maximum_length"]).isEqualTo(64)
+        assertThat(imports.getValue("first_date")["data_type"]).isEqualTo("date")
+    }
 
     @Test
     fun `accounts categories and spendings have the data-model columns`() {

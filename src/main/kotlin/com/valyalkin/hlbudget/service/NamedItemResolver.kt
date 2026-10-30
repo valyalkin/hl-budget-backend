@@ -11,6 +11,7 @@ import com.valyalkin.hlbudget.repository.category.CategoryRepository
 import org.springframework.stereotype.Component
 import java.time.Clock
 import java.time.Instant
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -49,6 +50,45 @@ class NamedItemResolver(
             accountById ?: byName(ACCOUNT, account, userId, now),
         )
     }
+
+    /**
+     * Finds or creates each distinct name once (feature 004, FR-032): `Visa`, `visa ` and `VISA`
+     * are one account. Names are trimmed; the maps are keyed by [key]. Names are handled in sorted
+     * order so two imports creating the same names never wait on each other in opposite orders.
+     */
+    fun resolveNames(
+        userId: UUID,
+        categoryNames: Collection<String>,
+        accountNames: Collection<String>,
+        now: Instant,
+    ): NameMaps =
+        NameMaps(
+            categories =
+                distinct(categoryNames).associate {
+                    key(it) to
+                        inserts.findOrCreateCategory(userId, it, now).toRef()
+                },
+            accounts =
+                distinct(accountNames).associate {
+                    key(it) to
+                        inserts.findOrCreateAccount(userId, it, now).toRef()
+                },
+        )
+
+    /** Resolved names, looked up with [NamedItemResolver.key]. */
+    data class NameMaps(
+        val categories: Map<String, Ref>,
+        val accounts: Map<String, Ref>,
+    ) {
+        fun category(name: String): Ref = categories.getValue(key(name))
+
+        fun account(name: String): Ref = accounts.getValue(key(name))
+    }
+
+    private fun distinct(names: Collection<String>): List<String> =
+        names.map { it.trim() }.distinctBy { key(it) }.sortedBy { key(it) }
+
+    private fun NamedItemRow.toRef() = Ref(id, name)
 
     private sealed interface Choice {
         data class ById(
@@ -138,9 +178,12 @@ class NamedItemResolver(
         return Ref(row.id, row.name)
     }
 
-    private companion object {
-        const val CATEGORY = "category"
-        const val ACCOUNT = "account"
-        const val MAX_NAME = 50
+    companion object {
+        private const val CATEGORY = "category"
+        private const val ACCOUNT = "account"
+        private const val MAX_NAME = 50
+
+        /** How names are compared: ignoring case and surrounding spaces. */
+        fun key(name: String): String = name.trim().lowercase(Locale.ROOT)
     }
 }

@@ -38,6 +38,9 @@ class OpenApiConfig {
                     Tag().name(TAG_SPENDINGS).description("The caller's spending transactions"),
                     Tag().name(TAG_TOTALS).description("Sums of the caller's spendings by month and by category"),
                     Tag()
+                        .name(TAG_SPENDING_IMPORTS)
+                        .description("Adding many spendings at once, all or nothing"),
+                    Tag()
                         .name(TAG_MERCHANTS)
                         .description("Merchants derived from the caller's spendings, for autofill"),
                     Tag()
@@ -95,6 +98,7 @@ class OpenApiConfig {
         const val TAG_SPENDINGS = "Spendings"
         const val TAG_TOTALS = "Totals"
         const val TAG_MERCHANTS = "Merchants"
+        const val TAG_SPENDING_IMPORTS = "Spending imports"
         const val PROBLEM_SCHEMA = "Problem"
         const val FIELD_VIOLATION_SCHEMA = "FieldViolation"
         const val HEALTH_SCHEMA = "HealthStatus"

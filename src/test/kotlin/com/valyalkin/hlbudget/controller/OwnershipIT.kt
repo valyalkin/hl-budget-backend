@@ -4,6 +4,8 @@ import com.valyalkin.hlbudget.support.AbstractIntegrationTest
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
 import java.util.UUID
 
 /**
@@ -122,5 +124,50 @@ class OwnershipIT : AbstractIntegrationTest() {
         assertThat(ids("/api/v1/spendings?size=100")).isEmpty()
         assertThat(ids("/api/v1/categories")).hasSize(17).doesNotContain(custom, default)
         assertThat(ids("/api/v1/spendings?accountId=$account&categoryId=$custom")).isEmpty()
+    }
+
+    private fun importJson(account: String) =
+        """{"spendings":[{"date":"2026-10-20","merchant":"Corner Bakery",""" +
+            """"amount":{"amount":"12.40","currency":"CAD"},"categoryName":"Groceries","accountName":"$account"}]}"""
+
+    private fun importAs(
+        token: String,
+        key: String,
+        account: String,
+    ): String {
+        var id = ""
+        client
+            .post()
+            .uri("/api/v1/spending-imports")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer $token")
+            .header("Idempotency-Key", key)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(importJson(account))
+            .exchange()
+            .expectStatus()
+            .isCreated()
+            .expectBody()
+            .jsonPath("$.id")
+            .value<String> { id = it }
+        return id
+    }
+
+    @Test
+    fun `another user's import does not exist, and names and keys are per user`() {
+        val alicesImport = importAs(alice, "shared-key", "Amex")
+
+        getJson(bob, "/api/v1/spending-imports/$alicesImport").expectStatus().isNotFound()
+
+        // Bob's "amex" is his own new account, and Alice's key means nothing to him.
+        importAs(bob, "shared-key", "amex")
+        assertThat(
+            count(
+                "SELECT count(*) FROM accounts WHERE lower(name) = 'amex' AND user_id = " +
+                    "(SELECT id FROM users WHERE auth0_subject = ?)",
+                BOB,
+            ),
+        ).isEqualTo(1)
+        assertThat(count("SELECT count(*) FROM accounts WHERE lower(name) = 'amex'")).isEqualTo(2)
+        assertThat(count("SELECT count(*) FROM spending_imports")).isEqualTo(2)
     }
 }

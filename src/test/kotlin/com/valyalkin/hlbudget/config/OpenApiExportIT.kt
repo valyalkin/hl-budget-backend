@@ -72,7 +72,15 @@ class OpenApiExportIT : AbstractIntegrationTest() {
             .exists()
             // Only the contract's paths: no framework endpoints, no Spring ProblemDetail schema.
             .jsonPath("$.paths.length()")
-            .isEqualTo(12)
+            .isEqualTo(14)
+            .jsonPath("$.paths['/api/v1/spending-imports'].post.responses.201")
+            .exists()
+            .jsonPath("$.paths['/api/v1/spending-imports'].post.responses.422")
+            .exists()
+            .jsonPath("$.paths['/api/v1/spending-imports/{importId}'].get.responses.404")
+            .exists()
+            .jsonPath("$.components.responses.SpendingImportValidationFailed")
+            .exists()
             .jsonPath("$.components.schemas.ProblemDetail")
             .doesNotExist()
     }
