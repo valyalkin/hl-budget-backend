@@ -1476,6 +1476,13 @@ components:
           type: string
           format: date-time
           example: 2026-10-29T14:03:11Z
+      required:
+      - createdAt
+      - firstDate
+      - id
+      - lastDate
+      - spendingCount
+      - total
     SpendingPage:
       type: object
       description: One page of the caller's spendings; `items` is empty when nothing
