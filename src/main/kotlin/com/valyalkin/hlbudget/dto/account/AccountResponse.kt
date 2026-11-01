@@ -24,6 +24,12 @@ data class AccountResponse(
         accessMode = Schema.AccessMode.READ_ONLY,
     )
     val color: String,
+    @field:Schema(
+        description = "How many of the caller's income entries use this account",
+        accessMode = Schema.AccessMode.READ_ONLY,
+        minimum = "0",
+    )
+    val incomeCount: Long,
 )
 
 @Schema(name = "AccountList", description = "All of the caller's accounts, sorted by name (never paged)")

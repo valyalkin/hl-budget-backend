@@ -1,6 +1,7 @@
 package com.valyalkin.hlbudget.service
 
 import com.valyalkin.hlbudget.model.DefaultCategories
+import com.valyalkin.hlbudget.model.DefaultIncomeCategories
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.CurrentUserRepository
 import com.valyalkin.hlbudget.repository.CurrentUserRow
@@ -71,5 +72,30 @@ class CurrentUserServiceTest {
         service.resolve(identity)
 
         verify(exactly = 0) { users.claimSeeding(any()) }
+    }
+
+    @Test
+    fun `a user seeded before income existed claims and gets the default income categories (feature 009)`() {
+        every { users.findBySubject("auth0|alice") } returns CurrentUserRow(id, Instant.now(), null)
+        every { users.claimIncomeSeeding(id) } returns true
+
+        service.resolve(identity)
+
+        verify(exactly = 0) { users.claimSeeding(any()) }
+        verify(exactly = 1) { users.insertDefaultIncomeCategories(id, DefaultIncomeCategories.ALL) }
+        assertThat(DefaultIncomeCategories.ALL.map { it.name to it.color })
+            .containsExactly("Salary" to "#1e5b45", "Investments" to "#1d4ed8")
+    }
+
+    @Test
+    fun `losing the income claim inserts nothing, and a user seeded for income never claims again`() {
+        every { users.findBySubject("auth0|alice") } returns CurrentUserRow(id, Instant.now(), null)
+        every { users.claimIncomeSeeding(id) } returns false
+        service.resolve(identity)
+        verify(exactly = 0) { users.insertDefaultIncomeCategories(any(), any()) }
+
+        every { users.findBySubject("auth0|alice") } returns CurrentUserRow(id, Instant.now(), Instant.now())
+        service.resolve(identity)
+        verify(exactly = 1) { users.claimIncomeSeeding(id) }
     }
 }

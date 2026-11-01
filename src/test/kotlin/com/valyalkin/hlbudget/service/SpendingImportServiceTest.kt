@@ -10,6 +10,7 @@ import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.category.CategoryEntity
 import com.valyalkin.hlbudget.repository.category.CategoryRepository
+import com.valyalkin.hlbudget.repository.incomecategory.IncomeCategoryRepository
 import com.valyalkin.hlbudget.repository.spending.SpendingEntity
 import com.valyalkin.hlbudget.repository.spending.SpendingInserts
 import com.valyalkin.hlbudget.repository.spendingimport.SpendingImportEntity
@@ -37,7 +38,7 @@ class SpendingImportServiceTest {
     private val now = Instant.parse("2026-10-27T15:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
     private val rules =
-        SpendingRules(
+        EntryRules(
             clock,
             HlBudgetProperties(HlBudgetProperties.Auth("i", "a", "j", "n"), HlBudgetProperties.Money("CAD"), "UTC"),
         )
@@ -47,7 +48,8 @@ class SpendingImportServiceTest {
     private val spendingInserts = mockk<SpendingInserts>()
     private val categories = mockk<CategoryRepository>()
     private val accounts = mockk<AccountRepository>()
-    private val names = NamedItemResolver(categories, accounts)
+    private val incomeCategories = mockk<IncomeCategoryRepository>()
+    private val names = NamedItemResolver(categories, accounts, incomeCategories)
     private val service =
         SpendingImportService(currentUser, imports, importInserts, spendingInserts, names, rules, clock)
 

@@ -72,7 +72,7 @@ class OpenApiExportIT : AbstractIntegrationTest() {
             .exists()
             // Only the contract's paths: no framework endpoints, no Spring ProblemDetail schema.
             .jsonPath("$.paths.length()")
-            .isEqualTo(15)
+            .isEqualTo(25)
             .jsonPath("$.paths['/api/v1/spending-imports'].post.responses.201")
             .exists()
             .jsonPath("$.paths['/api/v1/spending-imports'].post.responses.422")
@@ -167,8 +167,9 @@ class OpenApiExportIT : AbstractIntegrationTest() {
             .jsonPath("$.components.schemas.CategoryTotal.required")
             .value<List<String>> { assertThat(it).contains("color") }
             .jsonPath("$.components.schemas.Account.required")
-            .value<List<String>> { assertThat(it).containsExactlyInAnyOrder("id", "name", "spendingCount", "color") }
-            .jsonPath("$.components.schemas.Account.properties.color.pattern")
+            .value<List<String>> {
+                assertThat(it).containsExactlyInAnyOrder("id", "name", "spendingCount", "color", "incomeCount")
+            }.jsonPath("$.components.schemas.Account.properties.color.pattern")
             .isEqualTo("^#[0-9a-f]{6}$")
             .jsonPath("$.components.schemas.AccountTotal.required")
             .value<List<String>> {

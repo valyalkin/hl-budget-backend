@@ -7,6 +7,7 @@ import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.account.toModel
+import com.valyalkin.hlbudget.repository.income.IncomeRepository
 import com.valyalkin.hlbudget.repository.spending.SpendingRepository
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
@@ -25,6 +26,7 @@ class AccountService(
     private val currentUser: CurrentUserService,
     private val accounts: AccountRepository,
     private val spendings: SpendingRepository,
+    private val incomes: IncomeRepository,
     private val clock: Clock,
 ) {
     @Transactional
@@ -90,15 +92,15 @@ class AccountService(
             accounts.delete(account)
             accounts.flush()
         } catch (exception: DataIntegrityViolationException) {
-            // Only reachable if a spending slipped in despite the row lock; the statement failed, so
-            // the transaction cannot count again. At least one spending uses the account.
+            // Only reachable if an entry slipped in despite the row lock; the statement failed, so
+            // the transaction cannot count again. At least one entry uses the account.
             throw inUse(RESOURCE, id, 1, exception)
         }
     }
 
     /**
-     * The account, once it is known that it can go: it is the caller's, no spending uses it, and it
-     * is not their only account (FR-086). The lock on all their accounts makes both checks final.
+     * The account, once it is known that it can go: it is the caller's, no spending or income uses
+     * it, and it is not their only account (FR-086). The lock on all their accounts makes both checks final.
      */
     private fun deletable(
         userId: UUID,
@@ -140,8 +142,12 @@ class AccountService(
         userId: UUID,
         id: UUID,
     ) {
-        val used = spendings.countByUserIdAndAccountId(userId, id)
-        if (used > 0) throw inUse(RESOURCE, id, used)
+        val spent = spendings.countByUserIdAndAccountId(userId, id)
+        val received = incomes.countByUserIdAndAccountId(userId, id)
+        // Both counts, so a client can word the refusal (feature 009, FR-052).
+        if (spent + received > 0) {
+            throw inUse(RESOURCE, id, mapOf(SPENDING_COUNT to spent, INCOME_COUNT to received))
+        }
     }
 
     private companion object {

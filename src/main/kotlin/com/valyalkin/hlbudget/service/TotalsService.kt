@@ -6,6 +6,7 @@ import com.valyalkin.hlbudget.model.AccountTotal
 import com.valyalkin.hlbudget.model.AccountTotals
 import com.valyalkin.hlbudget.model.CategoryTotal
 import com.valyalkin.hlbudget.model.CategoryTotals
+import com.valyalkin.hlbudget.model.Ledger
 import com.valyalkin.hlbudget.model.Money
 import com.valyalkin.hlbudget.model.MonthTotal
 import com.valyalkin.hlbudget.model.MonthlyTotals
@@ -25,6 +26,9 @@ import java.time.temporal.ChronoUnit
  * research R-002) and the By account card (feature 008, research R-004). Sums are exact; nothing
  * here is a floating-point number.
  *
+ * With [Ledger.INCOMES] the same sums are over income (feature 009, research R-004); the
+ * `spendingCount` fields then count income entries.
+ *
  * Read-write transactions because resolving the caller may create their user row on a first call.
  */
 @Service
@@ -32,12 +36,13 @@ import java.time.temporal.ChronoUnit
 class TotalsService(
     private val currentUser: CurrentUserService,
     private val queries: TotalsQueries,
-    private val rules: SpendingRules,
+    private val rules: EntryRules,
 ) {
     /** Twelve months of [year] (the current year in the app's time zone when null), zeros included. */
     fun monthly(
         identity: VerifiedIdentity,
         year: Int?,
+        ledger: Ledger = Ledger.SPENDINGS,
     ): MonthlyTotals {
         val userId = currentUser.resolve(identity)
         val today = rules.today()
@@ -48,6 +53,7 @@ class TotalsService(
                     userId,
                     shown.atDay(1),
                     shown.atMonth(DECEMBER).atEndOfMonth(),
+                    ledger,
                 ).associateBy { it.month }
         val months =
             (1..DECEMBER).map { month ->
@@ -66,11 +72,12 @@ class TotalsService(
         identity: VerifiedIdentity,
         from: LocalDate,
         to: LocalDate,
+        ledger: Ledger = Ledger.SPENDINGS,
     ): CategoryTotals {
         checkRange(from, to)
         val userId = currentUser.resolve(identity)
         val items =
-            queries.byCategory(userId, from, to).map {
+            queries.byCategory(userId, from, to, ledger).map {
                 CategoryTotal(Ref(it.categoryId, it.categoryName), money(it.total), it.spendingCount, it.categoryColor)
             }
         return CategoryTotals(
@@ -87,11 +94,12 @@ class TotalsService(
         identity: VerifiedIdentity,
         from: LocalDate,
         to: LocalDate,
+        ledger: Ledger = Ledger.SPENDINGS,
     ): AccountTotals {
         checkRange(from, to)
         val userId = currentUser.resolve(identity)
         val items =
-            queries.byAccount(userId, from, to).map {
+            queries.byAccount(userId, from, to, ledger).map {
                 AccountTotal(Ref(it.accountId, it.accountName), money(it.total), it.spendingCount, it.accountColor)
             }
         return AccountTotals(

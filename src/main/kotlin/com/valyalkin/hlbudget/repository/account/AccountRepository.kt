@@ -5,25 +5,28 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import java.util.UUID
 
-/** An account with the number of the owner's spendings that use it, read in one query. */
+/** An account with the number of the owner's spendings and income entries that use it, read in one query. */
 data class AccountRow(
     val id: UUID,
     val name: String,
     val spendingCount: Long,
     val color: String,
+    val incomeCount: Long = 0,
 )
 
 interface AccountRepository : JpaRepository<AccountEntity, UUID> {
     @Query(
         "SELECT new com.valyalkin.hlbudget.repository.account.AccountRow(a.id, a.name, " +
-            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = a.userId AND s.accountId = a.id), a.color) " +
+            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = a.userId AND s.accountId = a.id), a.color, " +
+            "(SELECT count(i) FROM IncomeEntity i WHERE i.userId = a.userId AND i.accountId = a.id)) " +
             "FROM AccountEntity a WHERE a.userId = :userId ORDER BY lower(a.name), a.id",
     )
     fun findAllWithCounts(userId: UUID): List<AccountRow>
 
     @Query(
         "SELECT new com.valyalkin.hlbudget.repository.account.AccountRow(a.id, a.name, " +
-            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = a.userId AND s.accountId = a.id), a.color) " +
+            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = a.userId AND s.accountId = a.id), a.color, " +
+            "(SELECT count(i) FROM IncomeEntity i WHERE i.userId = a.userId AND i.accountId = a.id)) " +
             "FROM AccountEntity a WHERE a.userId = :userId AND a.id = :id",
     )
     fun findWithCount(

@@ -34,6 +34,9 @@ internal object OpenApiBudgetComponents {
     const val LAST_ACCOUNT = "#/components/responses/LastAccount"
     const val SPENDING_IMPORT_VALIDATION_FAILED = "#/components/responses/SpendingImportValidationFailed"
     const val LOCATION_HEADER_REF = "#/components/headers/Location"
+    const val INCOME_VALIDATION_FAILED = "#/components/responses/IncomeValidationFailed"
+    const val INCOME_IMPORT_VALIDATION_FAILED = "#/components/responses/IncomeImportValidationFailed"
+    const val INCOME_CATEGORY_IN_USE = "#/components/responses/IncomeCategoryInUse"
 
     private const val BAD = 400
     private const val NOT_FOUND_STATUS = 404
@@ -42,6 +45,7 @@ internal object OpenApiBudgetComponents {
     private const val SPENDING_ID = "8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66"
     private const val ACCOUNT_ID = "3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11"
     private const val IMPORTS_PATH = "/api/v1/spending-imports"
+    private const val INCOMES_PATH = "/api/v1/incomes"
 
     private val nameInvalid =
         problem(
@@ -79,7 +83,7 @@ internal object OpenApiBudgetComponents {
                 .description("Address of the resource")
                 .schema(StringSchema().example("/api/v1/spendings/8d3a6b1f-4c2e-4f7a-9b0d-1e2c3a4b5c66")),
         )
-        (protocolResponses() + conflictResponses() + validationResponses() + importResponses())
+        (protocolResponses() + conflictResponses() + validationResponses() + importResponses() + incomeResponses())
             .forEach { (name, response) -> components.addResponses(name, response) }
         return components
     }
@@ -124,8 +128,16 @@ internal object OpenApiBudgetComponents {
                 response("Lost a concurrent write; re-read and retry", "concurrent" to concurrent),
             "InUse" to
                 response(
-                    "Spendings still use this account or category; move or delete them first " +
-                        "(`details.reason = in-use`, `details.spendingCount`)",
+                    "Entries still use this account or category; move or delete them first " +
+                        "(`details.reason = in-use`, `details.spendingCount`; for an account also " +
+                        "`details.incomeCount`, the income entries that use it)",
+                    "inUseByIncome" to
+                        problem(
+                            CONFLICT,
+                            "Account $ACCOUNT_ID is used by 2 income entries",
+                            "/api/v1/accounts/$ACCOUNT_ID",
+                            details = mapOf("reason" to "in-use", "spendingCount" to 0, "incomeCount" to 2),
+                        ),
                     "inUse" to
                         problem(
                             CONFLICT,
@@ -236,6 +248,68 @@ internal object OpenApiBudgetComponents {
                             "The Idempotency-Key was already used for a different import",
                             IMPORTS_PATH,
                             details = mapOf("reason" to "idempotency-key-reused"),
+                        ),
+                ),
+        )
+
+    /** Feature 009: the income twins of the spending validation and in-use responses. */
+    private fun incomeResponses(): Map<String, ApiResponse> =
+        mapOf(
+            "IncomeValidationFailed" to
+                response(
+                    "Invalid fields, each listed in `errors`, with the same codes as SpendingValidationFailed. " +
+                        "NotFound marks an unknown or another user's income category or account, by id or by " +
+                        "name; a spending category's name is not an income category, and a name never creates " +
+                        "one. On create only, `details.reason = idempotency-key-reused` when the " +
+                        "Idempotency-Key was already used for a different income",
+                    "unknownCategoryName" to
+                        problem(
+                            UNPROCESSABLE,
+                            "1 field is invalid: categoryName",
+                            INCOMES_PATH,
+                            errors =
+                                listOf(
+                                    violation(
+                                        "#/categoryName",
+                                        "categoryName",
+                                        "NotFound",
+                                        "is not one of your income categories",
+                                    ),
+                                ),
+                        ),
+                ),
+            "IncomeImportValidationFailed" to
+                response(
+                    "Nothing was created. Every invalid field of every row is listed in `errors`, its pointer " +
+                        "naming the row by its 0-based position (`#/incomes/3/amount/amount`), with the codes " +
+                        "of SpendingImportValidationFailed; NotFound on a name that matches none of the " +
+                        "caller's income categories or accounts",
+                    "unknownCategory" to
+                        problem(
+                            UNPROCESSABLE,
+                            "1 field is invalid: incomes[1].categoryName",
+                            "/api/v1/income-imports",
+                            errors =
+                                listOf(
+                                    violation(
+                                        "#/incomes/1/categoryName",
+                                        "incomes[1].categoryName",
+                                        "NotFound",
+                                        "is not one of your income categories",
+                                    ),
+                                ),
+                        ),
+                ),
+            "IncomeCategoryInUse" to
+                response(
+                    "Income entries still use this income category; move or delete them first " +
+                        "(`details.reason = in-use`, `details.incomeCount`)",
+                    "inUse" to
+                        problem(
+                            CONFLICT,
+                            "Income category 7f8091a2-3c4d-4e5f-9a6b-7c8d9e0f1a23 is used by 1 income entries",
+                            "/api/v1/income-categories/7f8091a2-3c4d-4e5f-9a6b-7c8d9e0f1a23",
+                            details = mapOf("reason" to "in-use", "incomeCount" to 1),
                         ),
                 ),
         )
