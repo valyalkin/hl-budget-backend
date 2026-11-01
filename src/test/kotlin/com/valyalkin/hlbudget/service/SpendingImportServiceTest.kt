@@ -6,9 +6,9 @@ import com.valyalkin.hlbudget.error.UnprocessableEntityException
 import com.valyalkin.hlbudget.error.ValidationException
 import com.valyalkin.hlbudget.model.ImportRowCommand
 import com.valyalkin.hlbudget.model.VerifiedIdentity
-import com.valyalkin.hlbudget.repository.NamedItemInserts
-import com.valyalkin.hlbudget.repository.NamedItemRow
+import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
+import com.valyalkin.hlbudget.repository.category.CategoryEntity
 import com.valyalkin.hlbudget.repository.category.CategoryRepository
 import com.valyalkin.hlbudget.repository.spending.SpendingEntity
 import com.valyalkin.hlbudget.repository.spending.SpendingInserts
@@ -32,7 +32,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.UUID
 
-/** Feature 004, data-model.md "Write: create an import": all or nothing, names once, replays. */
+/** Feature 004, data-model.md "Write: create an import": all or nothing, existing names only (007), replays. */
 class SpendingImportServiceTest {
     private val now = Instant.parse("2026-10-27T15:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
@@ -45,8 +45,9 @@ class SpendingImportServiceTest {
     private val imports = mockk<SpendingImportRepository>()
     private val importInserts = mockk<SpendingImportInserts>()
     private val spendingInserts = mockk<SpendingInserts>()
-    private val namedInserts = mockk<NamedItemInserts>()
-    private val names = NamedItemResolver(mockk<CategoryRepository>(), mockk<AccountRepository>(), namedInserts, clock)
+    private val categories = mockk<CategoryRepository>()
+    private val accounts = mockk<AccountRepository>()
+    private val names = NamedItemResolver(categories, accounts)
     private val service =
         SpendingImportService(currentUser, imports, importInserts, spendingInserts, names, rules, clock)
 
@@ -63,7 +64,11 @@ class SpendingImportServiceTest {
         merchant: String = "Corner Bakery",
     ) = ImportRowCommand(LocalDate.parse(date), merchant, BigDecimal(amount), "CAD", category, account)
 
-    private fun named(name: String) = NamedItemRow(UUID.nameUUIDFromBytes(name.lowercase().toByteArray()), name)
+    private fun idOf(name: String): UUID = UUID.nameUUIDFromBytes(name.lowercase().toByteArray())
+
+    private fun category(name: String) = CategoryEntity(idOf(name), userId, name, true, "#c2410c", now, now, 0)
+
+    private fun account(name: String) = AccountEntity(idOf(name), userId, name, now, now, 0)
 
     private fun stored(
         key: String,
@@ -86,8 +91,8 @@ class SpendingImportServiceTest {
         every { imports.findByUserIdAndIdempotencyKey(userId, any()) } returns null
         every { importInserts.insertUnlessKeyTaken(capture(receipt)) } returns true
         every { spendingInserts.batchInsert(capture(inserted)) } just runs
-        every { namedInserts.findOrCreateCategory(userId, any(), now) } answers { named(secondArg()) }
-        every { namedInserts.findOrCreateAccount(userId, any(), now) } answers { named(secondArg()) }
+        every { categories.findAllByUserId(userId) } returns listOf(category("Groceries"), category("Car"))
+        every { accounts.findAllByUserId(userId) } returns listOf(account("Visa"), account("Amex"))
     }
 
     @Test
@@ -118,23 +123,45 @@ class SpendingImportServiceTest {
             assertThat(it.idempotencyKey).isNull()
             assertThat(it.createdAt).isEqualTo(now)
         }
-        assertThat(rows[1].categoryId).isEqualTo(named("Car").id)
-        assertThat(rows[0].accountId).isEqualTo(named("Visa").id)
+        assertThat(rows[1].categoryId).isEqualTo(idOf("Car"))
+        assertThat(rows[0].accountId).isEqualTo(idOf("Visa"))
     }
 
     @Test
-    fun `each name is found or created once, whatever its case or spaces`() {
+    fun `names match existing items whatever their case or spaces, read once`() {
         service.create(
             identity,
             listOf(row(account = "Visa"), row(account = "visa "), row(account = "VISA"), row(account = "Amex")),
             idempotencyKey = null,
         )
 
-        verify(exactly = 1) { namedInserts.findOrCreateAccount(userId, "Visa", now) }
-        verify(exactly = 1) { namedInserts.findOrCreateAccount(userId, "Amex", now) }
-        verify(exactly = 2) { namedInserts.findOrCreateAccount(userId, any(), now) }
-        verify(exactly = 1) { namedInserts.findOrCreateCategory(userId, any(), now) }
-        assertThat(inserted.captured.map { it.accountId }.distinct()).hasSize(2)
+        verify(exactly = 1) { accounts.findAllByUserId(userId) }
+        verify(exactly = 1) { categories.findAllByUserId(userId) }
+        assertThat(inserted.captured.map { it.accountId }).containsExactly(
+            idOf("Visa"),
+            idOf("Visa"),
+            idOf("Visa"),
+            idOf("Amex"),
+        )
+    }
+
+    @Test
+    fun `unknown names refuse the whole import at each row and nothing is written (feature 007)`() {
+        assertThatThrownBy {
+            service.create(
+                identity,
+                listOf(row(), row(category = "Groceriess"), row(account = "Visa Gold"), row(category = "Coffee")),
+                idempotencyKey = "k1",
+            )
+        }.isInstanceOfSatisfying(ValidationException::class.java) { exception ->
+            assertThat(exception.violations.map { "${it.pointer} ${it.code} ${it.message}" }).containsExactly(
+                "#/spendings/1/categoryName NotFound is not one of your categories",
+                "#/spendings/2/accountName NotFound is not one of your accounts",
+                "#/spendings/3/categoryName NotFound is not one of your categories",
+            )
+        }
+        verify(exactly = 0) { importInserts.insertUnlessKeyTaken(any()) }
+        verify(exactly = 0) { spendingInserts.batchInsert(any()) }
     }
 
     @Test
@@ -153,8 +180,6 @@ class SpendingImportServiceTest {
 
         verify(exactly = 0) { importInserts.insertUnlessKeyTaken(any()) }
         verify(exactly = 0) { spendingInserts.batchInsert(any()) }
-        verify(exactly = 0) { namedInserts.findOrCreateCategory(any(), any(), any()) }
-        verify(exactly = 0) { namedInserts.findOrCreateAccount(any(), any(), any()) }
     }
 
     @Test

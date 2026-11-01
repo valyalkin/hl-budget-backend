@@ -625,7 +625,7 @@ paths:
       description: |-
         Creates every row as a spending in one step. If any row is invalid, nothing is created and every problem is listed, with a JSON Pointer naming the row (`#/spendings/3/date`).
 
-        Categories and accounts are given by name. Each name is matched against the caller's items ignoring case and surrounding spaces, and created when none matches. A name that appears in several rows, in any letter case, creates one item.
+        Categories and accounts are given by name. Each name must match one of the caller's items, ignoring case and surrounding spaces; a name that matches none is refused with NotFound at that row, and nothing is created. Categories and accounts are created only through their own endpoints.
 
         Send an `Idempotency-Key` to make retries safe: repeating an import with the same key and the same rows returns the first import with 200 and `Idempotent-Replayed: true` instead of creating the spendings again.
       operationId: createSpendingImport
@@ -1248,7 +1248,8 @@ components:
           - string
           - "null"
           description: "Instead of categoryId: matched against the caller's categories\
-            \ ignoring case and surrounding spaces, and created when none matches"
+            \ ignoring case and surrounding spaces. Refused (422, NotFound) when none\
+            \ matches; never creates a category"
           example: Coffee
           maxLength: 50
           minLength: 0
@@ -1257,7 +1258,8 @@ components:
           - string
           - "null"
           description: "Instead of accountId: matched against the caller's accounts\
-            \ ignoring case and surrounding spaces, and created when none matches"
+            \ ignoring case and surrounding spaces. Refused (422, NotFound) when none\
+            \ matches; never creates an account"
           example: Visa
           maxLength: 50
           minLength: 0
@@ -1416,15 +1418,17 @@ components:
           $ref: "#/components/schemas/Money"
         categoryName:
           type: string
-          description: Matched against the caller's categories ignoring case and surrounding
-            spaces; created when none matches
+          description: "Matched against the caller's categories ignoring case and\
+            \ surrounding spaces. Refused (422, NotFound) when none matches; never\
+            \ creates a category"
           example: Groceries
           maxLength: 50
           minLength: 0
         accountName:
           type: string
-          description: Matched against the caller's accounts ignoring case and surrounding
-            spaces; created when none matches
+          description: "Matched against the caller's accounts ignoring case and surrounding\
+            \ spaces. Refused (422, NotFound) when none matches; never creates an\
+            \ account"
           example: Visa
           maxLength: 50
           minLength: 0
@@ -1991,10 +1995,11 @@ components:
     SpendingValidationFailed:
       description: "Invalid fields, each listed in `errors`. Codes include Required,\
         \ TypeMismatch, NotBlank, Size, Pattern, Positive, UnsupportedCurrency, NotFuture,\
-        \ NotFound (an unknown or another user's category or account) and ExactlyOne\
-        \ (give exactly one of categoryId and categoryName, and of accountId and accountName).\
-        \ On create only, `details.reason = idempotency-key-reused` when the Idempotency-Key\
-        \ was already used for a different spending"
+        \ NotFound (an unknown or another user's category or account, by id or by\
+        \ name; a name never creates one) and ExactlyOne (give exactly one of categoryId\
+        \ and categoryName, and of accountId and accountName). On create only, `details.reason\
+        \ = idempotency-key-reused` when the Idempotency-Key was already used for\
+        \ a different spending"
       headers:
         X-Request-Id:
           $ref: "#/components/headers/X-Request-Id"
@@ -2025,6 +2030,20 @@ components:
                   field: categoryId
                   code: NotFound
                   message: is not one of your categories
+            unknownCategoryName:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "1 field is invalid: categoryName"
+                instance: /api/v1/spendings
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/categoryName"
+                  field: categoryName
+                  code: NotFound
+                  message: is not one of your categories
             keyReused:
               value:
                 type: urn:problem:hl-budget:unprocessable-entity
@@ -2040,9 +2059,11 @@ components:
       description: "Nothing was created. Every invalid field of every row is listed\
         \ in `errors`, its pointer naming the row by its 0-based position (`#/spendings/3/amount/amount`).\
         \ Codes are those of SpendingRequest (Required, TypeMismatch, NotBlank, Size,\
-        \ Pattern, Positive, UnsupportedCurrency, NotFuture), plus Size on `#/spendings`\
-        \ for 0 or more than 1000 rows. `details.reason = idempotency-key-reused`\
-        \ when the Idempotency-Key was already used for different rows"
+        \ Pattern, Positive, UnsupportedCurrency, NotFuture), NotFound on a category\
+        \ or account name that matches none of the caller's items (an import never\
+        \ creates one), plus Size on `#/spendings` for 0 or more than 1000 rows. `details.reason\
+        \ = idempotency-key-reused` when the Idempotency-Key was already used for\
+        \ different rows"
       headers:
         X-Request-Id:
           $ref: "#/components/headers/X-Request-Id"
@@ -2069,6 +2090,24 @@ components:
                   field: "spendings[4].amount.amount"
                   code: Positive
                   message: must be greater than 0
+            unknownNames:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "2 fields are invalid: spendings[2].categoryName, spendings[5].accountName"
+                instance: /api/v1/spending-imports
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/spendings/2/categoryName"
+                  field: "spendings[2].categoryName"
+                  code: NotFound
+                  message: is not one of your categories
+                - pointer: "#/spendings/5/accountName"
+                  field: "spendings[5].accountName"
+                  code: NotFound
+                  message: is not one of your accounts
             tooMany:
               value:
                 type: urn:problem:hl-budget:unprocessable-entity

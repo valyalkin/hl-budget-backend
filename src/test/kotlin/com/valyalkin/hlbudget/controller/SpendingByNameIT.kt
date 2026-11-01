@@ -6,10 +6,12 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
-import java.util.concurrent.Callable
-import java.util.concurrent.Executors
 
-/** Feature 003, FR-035 and research R-004: a spending saved with a category or account name. */
+/**
+ * Feature 003, FR-035 and research R-004, as changed by feature 007 (FR-021, FR-026, research
+ * R-008): a spending saved with a category or account name. The name must match one of the
+ * caller's items; nothing is created.
+ */
 class SpendingByNameIT : AbstractIntegrationTest() {
     private val base = "/api/v1/spendings"
 
@@ -51,27 +53,63 @@ class SpendingByNameIT : AbstractIntegrationTest() {
     }
 
     @Test
-    fun `new names are created with the spending, and the response names them`() {
-        sendJson(alice, "POST", base, byNames("Coffee", "Visa"))
-            .expectStatus()
-            .isCreated()
-            .expectBody()
-            .jsonPath("$.category.name")
-            .isEqualTo("Coffee")
-            .jsonPath("$.account.name")
-            .isEqualTo("Visa")
+    fun `an unknown category name is refused at the name, and nothing is created`() {
+        createAccount(alice, "Amex")
 
-        assertThat(names(alice, "categories")).contains("Coffee")
-        assertThat(names(alice, "accounts")).containsExactly("Visa")
-        assertThat(count("select count(*) from categories where name = 'Coffee' and is_default = false"))
+        sendJson(alice, "POST", base, byNames("Groceriess", "Amex"))
+            .expectStatus()
+            .isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.type")
+            .isEqualTo("urn:problem:hl-budget:unprocessable-entity")
+            .jsonPath("$.errors.length()")
             .isEqualTo(1)
+            .jsonPath("$.errors[0].pointer")
+            .isEqualTo("#/categoryName")
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("categoryName")
+            .jsonPath("$.errors[0].code")
+            .isEqualTo("NotFound")
+            .jsonPath("$.errors[0].message")
+            .isEqualTo("is not one of your categories")
+
+        assertThat(names(alice, "categories")).hasSize(17).doesNotContain("Groceriess")
+        assertThat(count("select count(*) from spendings")).isZero()
     }
 
     @Test
-    fun `a name matching an existing item in any case reuses it`() {
+    fun `an unknown account name is refused at the name, and nothing is created`() {
+        createAccount(alice, "Amex")
+
+        sendJson(alice, "POST", base, byNames("Groceries", "Visa Gold"))
+            .expectStatus()
+            .isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.errors[0].pointer")
+            .isEqualTo("#/accountName")
+            .jsonPath("$.errors[0].code")
+            .isEqualTo("NotFound")
+            .jsonPath("$.errors[0].message")
+            .isEqualTo("is not one of your accounts")
+
+        assertThat(names(alice, "accounts")).containsExactly("Amex")
+    }
+
+    @Test
+    fun `both unknown, and other rule breaks, are reported at once`() {
+        assertThat(pointers(byNames("Coffee", "Visa"))).containsExactly("#/categoryName", "#/accountName")
+        assertThat(pointers(byNames("Coffee", "Visa", date = TestClockConfig.TOMORROW)))
+            .containsExactlyInAnyOrder("#/date", "#/categoryName", "#/accountName")
+
+        assertThat(names(alice, "accounts")).isEmpty()
+        assertThat(names(alice, "categories")).doesNotContain("Coffee")
+    }
+
+    @Test
+    fun `a name matching an existing item in any case and spacing reuses it`() {
         val amex = createAccount(alice, "Amex")
 
-        sendJson(alice, "POST", base, byNames(" GROCERIES ", "amex"))
+        sendJson(alice, "POST", base, byNames("  groceries ", "AMEX"))
             .expectStatus()
             .isCreated()
             .expectBody()
@@ -101,32 +139,39 @@ class SpendingByNameIT : AbstractIntegrationTest() {
     }
 
     @Test
-    fun `a refused spending creates nothing`() {
-        assertThat(pointers(byNames("Brand new", "Brand new", date = TestClockConfig.TOMORROW)))
-            .containsExactly("#/date")
-
-        assertThat(names(alice, "accounts")).isEmpty()
-        assertThat(names(alice, "categories")).doesNotContain("Brand new")
-    }
-
-    @Test
-    fun `an update can name a new category and account`() {
+    fun `an update to an unknown name is refused and the spending is unchanged`() {
         val amex = createAccount(alice, "Amex")
         val id = createSpending(alice, categoryIds(alice).getValue("Groceries"), amex)
 
-        sendJson(alice, "PUT", "$base/$id", byNames("Gifts", "Cash"))
+        assertThat(pointers(byNames("Gifts", "Cash"), method = "PUT", uri = "$base/$id"))
+            .containsExactly("#/categoryName", "#/accountName")
+
+        getJson(alice, "$base/$id")
+            .expectBody()
+            .jsonPath("$.category.name")
+            .isEqualTo("Groceries")
+            .jsonPath("$.account.name")
+            .isEqualTo("Amex")
+        assertThat(names(alice, "accounts")).containsExactly("Amex")
+    }
+
+    @Test
+    fun `an update can move a spending to an existing category by name`() {
+        val amex = createAccount(alice, "Amex")
+        val id = createSpending(alice, categoryIds(alice).getValue("Groceries"), amex)
+
+        sendJson(alice, "PUT", "$base/$id", byNames("taxi", "amex"))
             .expectStatus()
             .isOk()
             .expectBody()
             .jsonPath("$.category.name")
-            .isEqualTo("Gifts")
-            .jsonPath("$.account.name")
-            .isEqualTo("Cash")
-        assertThat(names(alice, "accounts")).containsExactly("Amex", "Cash")
+            .isEqualTo("Taxi")
     }
 
     @Test
-    fun `a replay by name returns the first spending and creates one category`() {
+    fun `a replay by name returns the first spending`() {
+        createAccount(alice, "Visa")
+
         fun post() =
             client
                 .post()
@@ -134,7 +179,7 @@ class SpendingByNameIT : AbstractIntegrationTest() {
                 .header(HttpHeaders.AUTHORIZATION, bearer(alice))
                 .header("Idempotency-Key", "by-name-1")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(byNames("Coffee", "Visa"))
+                .body(byNames("Groceries", "Visa"))
                 .exchange()
 
         post().expectStatus().isCreated()
@@ -145,26 +190,14 @@ class SpendingByNameIT : AbstractIntegrationTest() {
             .valueEquals("Idempotent-Replayed", "true")
 
         assertThat(count("select count(*) from spendings")).isEqualTo(1)
-        assertThat(count("select count(*) from categories where lower(name) = 'coffee'")).isEqualTo(1)
     }
 
     @Test
-    fun `concurrent saves naming the same new category share one category`() {
-        categoryIds(alice) // seed the defaults first, so the race is only about "Coffee"
-        val pool = Executors.newFixedThreadPool(4)
-        val tasks =
-            (1..4).map { n ->
-                Callable {
-                    sendJson(alice, "POST", base, byNames("Coffee", "Visa", merchant = "Shop $n"))
-                        .expectStatus()
-                        .isCreated()
-                }
-            }
-        pool.invokeAll(tasks).forEach { it.get() }
-        pool.shutdown()
+    fun `another user's item name does not count`() {
+        sendJson(bob, "POST", "/api/v1/categories", """{"name":"Coffee"}""").expectStatus().isCreated()
+        createAccount(bob, "Visa")
+        createAccount(alice, "Amex")
 
-        assertThat(count("select count(*) from spendings")).isEqualTo(4)
-        assertThat(count("select count(*) from categories where lower(name) = 'coffee'")).isEqualTo(1)
-        assertThat(count("select count(*) from accounts where lower(name) = 'visa'")).isEqualTo(1)
+        assertThat(pointers(byNames("Coffee", "Visa"))).containsExactly("#/categoryName", "#/accountName")
     }
 }

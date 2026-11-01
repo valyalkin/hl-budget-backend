@@ -2,35 +2,30 @@ package com.valyalkin.hlbudget.service
 
 import com.valyalkin.hlbudget.error.FieldViolation
 import com.valyalkin.hlbudget.error.ValidationException
+import com.valyalkin.hlbudget.model.ImportRowCommand
 import com.valyalkin.hlbudget.model.Ref
 import com.valyalkin.hlbudget.model.SpendingCommand
-import com.valyalkin.hlbudget.repository.NamedItemInserts
-import com.valyalkin.hlbudget.repository.NamedItemRow
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.category.CategoryRepository
 import org.springframework.stereotype.Component
-import java.time.Clock
-import java.time.Instant
 import java.util.Locale
 import java.util.UUID
 
 /**
  * Turns a spending's category and account, each given by id or by name, into the caller's own
- * items (research R-004).
+ * items (feature 003 research R-004, changed by feature 007 research R-008).
  *
- * - An id must name one of the caller's items; anything else is `NotFound`, as in feature 002.
- * - A name is trimmed, must not be blank and has at most 50 characters. It reuses the caller's
- *   item with the same name ignoring case, or creates one.
+ * - An id must name one of the caller's items; anything else is `NotFound`.
+ * - A name is trimmed, must not be blank and has at most 50 characters. It must match one of the
+ *   caller's items ignoring case; anything else is `NotFound`. Categories and accounts are created
+ *   only in Settings, never here (feature 007, FR-020).
  *
- * Every problem is reported at once with the [earlier] ones (FR-005). Nothing is created unless
- * the whole request is valid, so a refused spending never leaves a new item behind.
+ * Every problem is reported at once with the [earlier] ones (FR-005).
  */
 @Component
 class NamedItemResolver(
     private val categories: CategoryRepository,
     private val accounts: AccountRepository,
-    private val inserts: NamedItemInserts,
-    private val clock: Clock,
 ) {
     fun resolve(
         userId: UUID,
@@ -40,42 +35,22 @@ class NamedItemResolver(
         val violations = earlier.toMutableList()
         val category = choose(CATEGORY, command.categoryId, command.categoryName, violations)
         val account = choose(ACCOUNT, command.accountId, command.accountName, violations)
-        val categoryById = (category as? Choice.ById)?.let { owned(CATEGORY, it.id, userId, violations) }
-        val accountById = (account as? Choice.ById)?.let { owned(ACCOUNT, it.id, userId, violations) }
-        if (violations.isNotEmpty()) throw ValidationException(violations)
-
-        val now = Instant.now(clock)
-        return Pair(
-            categoryById ?: byName(CATEGORY, category, userId, now),
-            accountById ?: byName(ACCOUNT, account, userId, now),
-        )
+        val categoryRef = find(CATEGORY, category, userId, violations)
+        val accountRef = find(ACCOUNT, account, userId, violations)
+        if (violations.isNotEmpty() || categoryRef == null || accountRef == null) {
+            throw ValidationException(violations)
+        }
+        return Pair(categoryRef, accountRef)
     }
 
-    /**
-     * Finds or creates each distinct name once (feature 004, FR-032): `Visa`, `visa ` and `VISA`
-     * are one account. Names are trimmed; the maps are keyed by [key]. Names are handled in sorted
-     * order so two imports creating the same names never wait on each other in opposite orders.
-     */
-    fun resolveNames(
-        userId: UUID,
-        categoryNames: Collection<String>,
-        accountNames: Collection<String>,
-        now: Instant,
-    ): NameMaps =
+    /** All of the caller's categories and accounts, keyed by [key], read in one query each. */
+    fun names(userId: UUID): NameMaps =
         NameMaps(
-            categories =
-                distinct(categoryNames).associate {
-                    key(it) to
-                        inserts.findOrCreateCategory(userId, it, now).toRef()
-                },
-            accounts =
-                distinct(accountNames).associate {
-                    key(it) to
-                        inserts.findOrCreateAccount(userId, it, now).toRef()
-                },
+            categories = categories.findAllByUserId(userId).associate { key(it.name) to Ref(it.id, it.name) },
+            accounts = accounts.findAllByUserId(userId).associate { key(it.name) to Ref(it.id, it.name) },
         )
 
-    /** Resolved names, looked up with [NamedItemResolver.key]. */
+    /** The caller's items by name, looked up with [NamedItemResolver.key]. */
     data class NameMaps(
         val categories: Map<String, Ref>,
         val accounts: Map<String, Ref>,
@@ -83,12 +58,34 @@ class NamedItemResolver(
         fun category(name: String): Ref = categories.getValue(key(name))
 
         fun account(name: String): Ref = accounts.getValue(key(name))
+
+        /** An import row's names that match nothing (feature 007, FR-025), at the row's pointers. */
+        fun violations(
+            row: ImportRowCommand,
+            index: Int,
+        ): List<FieldViolation> =
+            listOfNotNull(
+                missing(categories, row.categoryName, index, CATEGORY),
+                missing(accounts, row.accountName, index, ACCOUNT),
+            )
+
+        private fun missing(
+            items: Map<String, Ref>,
+            name: String,
+            index: Int,
+            kind: String,
+        ): FieldViolation? =
+            if (key(name) in items) {
+                null
+            } else {
+                FieldViolation(
+                    "#/spendings/$index/${kind}Name",
+                    "spendings[$index].${kind}Name",
+                    NOT_FOUND,
+                    notYours(kind),
+                )
+            }
     }
-
-    private fun distinct(names: Collection<String>): List<String> =
-        names.map { it.trim() }.distinctBy { key(it) }.sortedBy { key(it) }
-
-    private fun NamedItemRow.toRef() = Ref(id, name)
 
     private sealed interface Choice {
         data class ById(
@@ -143,45 +140,53 @@ class NamedItemResolver(
         return Choice.Invalid
     }
 
-    private fun owned(
-        kind: String,
-        id: UUID,
-        userId: UUID,
-        violations: MutableList<FieldViolation>,
-    ): Ref? {
-        val found =
-            if (kind == CATEGORY) {
-                categories.findByIdAndUserId(id, userId)?.let { Ref(it.id, it.name) }
-            } else {
-                accounts.findByIdAndUserId(id, userId)?.let { Ref(it.id, it.name) }
-            }
-        if (found == null) {
-            val plural = if (kind == CATEGORY) "categories" else "accounts"
-            violations += FieldViolation("#/${kind}Id", "${kind}Id", "NotFound", "is not one of your $plural")
-        }
-        return found
-    }
-
-    private fun byName(
+    /** The caller's item for a valid [choice], or `null` with a `NotFound` violation at its field. */
+    private fun find(
         kind: String,
         choice: Choice,
         userId: UUID,
-        now: Instant,
-    ): Ref {
-        check(choice is Choice.ByName) { "Only reached when the $kind was given by a valid name" }
-        val row: NamedItemRow =
-            if (kind == CATEGORY) {
-                inserts.findOrCreateCategory(userId, choice.name, now)
-            } else {
-                inserts.findOrCreateAccount(userId, choice.name, now)
+        violations: MutableList<FieldViolation>,
+    ): Ref? {
+        val (field, found) =
+            when (choice) {
+                is Choice.ById -> "${kind}Id" to byId(kind, choice.id, userId)
+                is Choice.ByName -> "${kind}Name" to byName(kind, choice.name, userId)
+                Choice.Invalid -> return null
             }
-        return Ref(row.id, row.name)
+        if (found == null) violations += FieldViolation("#/$field", field, NOT_FOUND, notYours(kind))
+        return found
     }
+
+    private fun byId(
+        kind: String,
+        id: UUID,
+        userId: UUID,
+    ): Ref? =
+        if (kind == CATEGORY) {
+            categories.findByIdAndUserId(id, userId)?.let { Ref(it.id, it.name) }
+        } else {
+            accounts.findByIdAndUserId(id, userId)?.let { Ref(it.id, it.name) }
+        }
+
+    private fun byName(
+        kind: String,
+        name: String,
+        userId: UUID,
+    ): Ref? =
+        if (kind == CATEGORY) {
+            categories.findByUserIdAndNameIgnoreCase(userId, name)?.let { Ref(it.id, it.name) }
+        } else {
+            accounts.findByUserIdAndNameIgnoreCase(userId, name)?.let { Ref(it.id, it.name) }
+        }
 
     companion object {
         private const val CATEGORY = "category"
         private const val ACCOUNT = "account"
         private const val MAX_NAME = 50
+        private const val NOT_FOUND = "NotFound"
+
+        private fun notYours(kind: String): String =
+            if (kind == CATEGORY) "is not one of your categories" else "is not one of your accounts"
 
         /** How names are compared: ignoring case and surrounding spaces. */
         fun key(name: String): String = name.trim().lowercase(Locale.ROOT)

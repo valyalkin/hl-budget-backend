@@ -44,6 +44,12 @@ interface CategoryRepository : JpaRepository<CategoryEntity, UUID> {
 
     fun findAllByUserId(userId: UUID): List<CategoryEntity>
 
+    /** Feature 007, research R-008: a name given with a spending must match an existing item. */
+    fun findByUserIdAndNameIgnoreCase(
+        userId: UUID,
+        name: String,
+    ): CategoryEntity?
+
     /** Feature 007, research R-004: what a new category's colour is chosen from. */
     @Query(
         "SELECT c.color AS color, count(c) AS count FROM CategoryEntity c WHERE c.userId = :userId GROUP BY c.color",

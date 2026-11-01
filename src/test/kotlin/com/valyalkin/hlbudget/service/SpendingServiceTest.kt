@@ -6,7 +6,6 @@ import com.valyalkin.hlbudget.error.UnprocessableEntityException
 import com.valyalkin.hlbudget.error.ValidationException
 import com.valyalkin.hlbudget.model.SpendingCommand
 import com.valyalkin.hlbudget.model.VerifiedIdentity
-import com.valyalkin.hlbudget.repository.NamedItemInserts
 import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.category.CategoryEntity
@@ -43,8 +42,7 @@ class SpendingServiceTest {
     private val inserts = mockk<SpendingInserts>()
     private val categories = mockk<CategoryRepository>()
     private val accounts = mockk<AccountRepository>()
-    private val namedInserts = mockk<NamedItemInserts>()
-    private val names = NamedItemResolver(categories, accounts, namedInserts, clock)
+    private val names = NamedItemResolver(categories, accounts)
     private val service = SpendingService(currentUser, spendings, inserts, categories, accounts, rules, names, clock)
 
     private val identity = VerifiedIdentity("auth0|alice", null, null, null)
