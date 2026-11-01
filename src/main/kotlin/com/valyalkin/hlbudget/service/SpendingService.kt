@@ -36,7 +36,7 @@ class SpendingService(
     private val inserts: SpendingInserts,
     private val categories: CategoryRepository,
     private val accounts: AccountRepository,
-    private val rules: SpendingRules,
+    private val rules: EntryRules,
     private val names: NamedItemResolver,
     private val clock: Clock,
 ) {

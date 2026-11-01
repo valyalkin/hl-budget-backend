@@ -1,5 +1,6 @@
 package com.valyalkin.hlbudget.repository.spending
 
+import com.valyalkin.hlbudget.model.Ledger
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Repository
 import java.math.BigDecimal
@@ -31,7 +32,10 @@ data class AccountTotalRow(
     val spendingCount: Long,
 )
 
-/** Sums over the caller's spendings, computed in Postgres on exact `numeric` (feature 003, R-002). */
+/**
+ * Sums over the caller's spendings or income, computed in Postgres on exact `numeric` (feature 003,
+ * R-002). [Ledger] picks the tables (feature 009, research R-004); `spendingCount` counts its entries.
+ */
 @Repository
 class TotalsQueries(
     private val jdbc: JdbcClient,
@@ -41,13 +45,14 @@ class TotalsQueries(
         userId: UUID,
         from: LocalDate,
         to: LocalDate,
+        ledger: Ledger = Ledger.SPENDINGS,
     ): List<MonthTotalRow> =
         jdbc
             .sql(
                 """
-                SELECT extract(month FROM spending_date)::int AS month, sum(amount) AS total, count(*) AS n
-                FROM spendings
-                WHERE user_id = :userId AND spending_date BETWEEN :from AND :to
+                SELECT extract(month FROM ${ledger.dateColumn})::int AS month, sum(amount) AS total, count(*) AS n
+                FROM ${ledger.table}
+                WHERE user_id = :userId AND ${ledger.dateColumn} BETWEEN :from AND :to
                 GROUP BY 1
                 """.trimIndent(),
             ).param("userId", userId)
@@ -61,14 +66,15 @@ class TotalsQueries(
         userId: UUID,
         from: LocalDate,
         to: LocalDate,
+        ledger: Ledger = Ledger.SPENDINGS,
     ): List<CategoryTotalRow> =
         jdbc
             .sql(
                 """
                 SELECT c.id, c.name, c.color, sum(s.amount) AS total, count(*) AS n
-                FROM spendings s
-                JOIN categories c ON c.id = s.category_id AND c.user_id = s.user_id
-                WHERE s.user_id = :userId AND s.spending_date BETWEEN :from AND :to
+                FROM ${ledger.table} s
+                JOIN ${ledger.categoryTable} c ON c.id = s.category_id AND c.user_id = s.user_id
+                WHERE s.user_id = :userId AND s.${ledger.dateColumn} BETWEEN :from AND :to
                 GROUP BY c.id, c.name, c.color
                 ORDER BY total DESC, lower(c.name), c.id
                 """.trimIndent(),
@@ -90,14 +96,15 @@ class TotalsQueries(
         userId: UUID,
         from: LocalDate,
         to: LocalDate,
+        ledger: Ledger = Ledger.SPENDINGS,
     ): List<AccountTotalRow> =
         jdbc
             .sql(
                 """
                 SELECT a.id, a.name, a.color, sum(s.amount) AS total, count(*) AS n
-                FROM spendings s
+                FROM ${ledger.table} s
                 JOIN accounts a ON a.id = s.account_id AND a.user_id = s.user_id
-                WHERE s.user_id = :userId AND s.spending_date BETWEEN :from AND :to
+                WHERE s.user_id = :userId AND s.${ledger.dateColumn} BETWEEN :from AND :to
                 GROUP BY a.id, a.name, a.color
                 ORDER BY total DESC, lower(a.name), a.id
                 """.trimIndent(),

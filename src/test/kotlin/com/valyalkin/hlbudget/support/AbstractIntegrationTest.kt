@@ -140,6 +140,49 @@ abstract class AbstractIntegrationTest {
         """{"date":"$date","merchant":"$merchant","amount":{"amount":"$amount","currency":"$currency"},""" +
             """"categoryId":"$categoryId","accountId":"$accountId"}"""
 
+    /** The caller's income category ids by name (this also seeds Salary and Investments). */
+    protected fun incomeCategoryIds(token: String): Map<String, String> {
+        var ids = emptyMap<String, String>()
+        getJson(token, "/api/v1/income-categories")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.items")
+            .value<List<Map<String, Any>>> { items ->
+                ids = items.associate { it["name"] as String to it["id"] as String }
+            }
+        return ids
+    }
+
+    /** Creates an income through the API and returns its id (feature 009). */
+    @Suppress("LongParameterList")
+    protected fun createIncome(
+        token: String,
+        categoryId: String,
+        accountId: String,
+        amount: String = "5000.00",
+        date: String = "2026-10-15",
+        source: String = "Acme Corp",
+    ): String =
+        idOf(
+            sendJson(
+                token,
+                "POST",
+                "/api/v1/incomes",
+                incomeJson(categoryId, accountId, amount, date, source),
+            ).expectStatus().isCreated(),
+        )
+
+    protected fun incomeJson(
+        categoryId: String,
+        accountId: String,
+        amount: String = "5000.00",
+        date: String = "2026-10-15",
+        source: String = "Acme Corp",
+    ): String =
+        """{"date":"$date","source":"$source","amount":{"amount":"$amount","currency":"CAD"},""" +
+            """"categoryId":"$categoryId","accountId":"$accountId"}"""
+
     private fun idOf(response: RestTestClient.ResponseSpec): String {
         var id = ""
         response

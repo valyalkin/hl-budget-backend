@@ -36,10 +36,21 @@ class OpenApiConfig {
                         .name(TAG_CATEGORIES)
                         .description("What the caller's money was spent on, including the 17 defaults"),
                     Tag().name(TAG_SPENDINGS).description("The caller's spending transactions"),
-                    Tag().name(TAG_TOTALS).description("Sums of the caller's spendings by month and by category"),
+                    Tag()
+                        .name(TAG_INCOMES)
+                        .description("The caller's income entries and their past sources (feature 009)"),
+                    Tag()
+                        .name(TAG_INCOME_CATEGORIES)
+                        .description("What kind of income it is, including Salary and Investments"),
+                    Tag()
+                        .name(TAG_TOTALS)
+                        .description("Sums of the caller's spendings and income by month, category and account"),
                     Tag()
                         .name(TAG_SPENDING_IMPORTS)
                         .description("Adding many spendings at once, all or nothing"),
+                    Tag()
+                        .name(TAG_INCOME_IMPORTS)
+                        .description("Adding many income entries at once, all or nothing"),
                     Tag()
                         .name(TAG_MERCHANTS)
                         .description("Merchants derived from the caller's spendings, for autofill"),
@@ -90,6 +101,18 @@ class OpenApiConfig {
                 "AccountTotals",
                 "Merchant",
                 "MerchantList",
+                "Income",
+                "IncomePage",
+                "IncomeCategory",
+                "IncomeCategoryList",
+                "IncomeSource",
+                "IncomeSourceList",
+                "IncomeMonthTotal",
+                "IncomeMonthlyTotals",
+                "IncomeCategoryTotal",
+                "IncomeCategoryTotals",
+                "IncomeAccountTotal",
+                "IncomeAccountTotals",
             )
 
         const val BEARER_SCHEME = "bearerAuth"
@@ -101,6 +124,9 @@ class OpenApiConfig {
         const val TAG_TOTALS = "Totals"
         const val TAG_MERCHANTS = "Merchants"
         const val TAG_SPENDING_IMPORTS = "Spending imports"
+        const val TAG_INCOMES = "Incomes"
+        const val TAG_INCOME_CATEGORIES = "Income categories"
+        const val TAG_INCOME_IMPORTS = "Income imports"
         const val PROBLEM_SCHEMA = "Problem"
         const val FIELD_VIOLATION_SCHEMA = "FieldViolation"
         const val HEALTH_SCHEMA = "HealthStatus"

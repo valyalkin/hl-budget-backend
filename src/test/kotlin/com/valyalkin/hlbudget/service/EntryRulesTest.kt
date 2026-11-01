@@ -13,7 +13,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 /** Research R-006/R-007: the rules only the service can check, and the idempotency fingerprint. */
-class SpendingRulesTest {
+class EntryRulesTest {
     // 03:30 UTC on the 28th is still the evening of the 27th in Toronto.
     private val clock = Clock.fixed(Instant.parse("2026-10-28T03:30:00Z"), ZoneOffset.UTC)
     private val properties =
@@ -22,7 +22,7 @@ class SpendingRulesTest {
             money = HlBudgetProperties.Money("CAD"),
             timeZone = "America/Toronto",
         )
-    private val rules = SpendingRules(clock, properties)
+    private val rules = EntryRules(clock, properties)
     private val category = UUID.fromString("2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55")
     private val account = UUID.fromString("3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11")
 

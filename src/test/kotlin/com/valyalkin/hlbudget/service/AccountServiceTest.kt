@@ -10,6 +10,7 @@ import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.account.AccountRow
 import com.valyalkin.hlbudget.repository.category.ColorCount
+import com.valyalkin.hlbudget.repository.income.IncomeRepository
 import com.valyalkin.hlbudget.repository.spending.SpendingRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -29,8 +30,9 @@ class AccountServiceTest {
     private val currentUser = mockk<CurrentUserService>()
     private val accounts = mockk<AccountRepository>(relaxed = true)
     private val spendings = mockk<SpendingRepository>()
+    private val incomes = mockk<IncomeRepository> { every { countByUserIdAndAccountId(any(), any()) } returns 0 }
     private val now = Instant.parse("2026-10-27T15:00:00Z")
-    private val service = AccountService(currentUser, accounts, spendings, Clock.fixed(now, ZoneOffset.UTC))
+    private val service = AccountService(currentUser, accounts, spendings, incomes, Clock.fixed(now, ZoneOffset.UTC))
     private val identity = VerifiedIdentity("auth0|alice", null, null, null)
     private val userId = UUID.randomUUID()
     private val accountId = UUID.randomUUID()
@@ -161,7 +163,14 @@ class AccountServiceTest {
 
         assertThatThrownBy { service.delete(identity, accountId) }
             .isInstanceOf(ConflictException::class.java)
-            .hasFieldOrPropertyWithValue("details", mapOf("reason" to "in-use", "spendingCount" to 2L))
+            .hasFieldOrPropertyWithValue(
+                "details",
+                mapOf(
+                    "reason" to "in-use",
+                    "spendingCount" to 2L,
+                    "incomeCount" to 0L,
+                ),
+            )
         verify(exactly = 0) { accounts.delete(any()) }
     }
 
@@ -209,7 +218,14 @@ class AccountServiceTest {
         every { spendings.countByUserIdAndAccountId(userId, accountId) } returns 3
         assertThatThrownBy { service.delete(identity, accountId) }
             .isInstanceOf(ConflictException::class.java)
-            .hasFieldOrPropertyWithValue("details", mapOf("reason" to "in-use", "spendingCount" to 3L))
+            .hasFieldOrPropertyWithValue(
+                "details",
+                mapOf(
+                    "reason" to "in-use",
+                    "spendingCount" to 3L,
+                    "incomeCount" to 0L,
+                ),
+            )
     }
 
     private fun colorCounts(vararg colors: String): List<ColorCount> =

@@ -11,6 +11,8 @@ import java.util.UUID
 data class CurrentUserRow(
     val id: UUID,
     val categoriesSeededAt: Instant?,
+    /** When Salary and Investments were created (feature 009, research R-002); null means not yet. */
+    val incomeCategoriesSeededAt: Instant? = null,
 )
 
 /**
@@ -24,12 +26,16 @@ class CurrentUserRepository(
 ) {
     fun findBySubject(subject: String): CurrentUserRow? =
         jdbc
-            .sql("SELECT id, categories_seeded_at FROM users WHERE auth0_subject = :subject")
-            .param("subject", subject)
+            .sql(
+                "SELECT id, categories_seeded_at, income_categories_seeded_at FROM users " +
+                    "WHERE auth0_subject = :subject",
+            ).param("subject", subject)
             .query { rs, _ ->
                 CurrentUserRow(
                     id = rs.getObject("id", UUID::class.java),
                     categoriesSeededAt = rs.getObject("categories_seeded_at", OffsetDateTime::class.java)?.toInstant(),
+                    incomeCategoriesSeededAt =
+                        rs.getObject("income_categories_seeded_at", OffsetDateTime::class.java)?.toInstant(),
                 )
             }.optional()
             .orElse(null)
@@ -55,6 +61,37 @@ class CurrentUserRepository(
             .query(UUID::class.java)
             .optional()
             .isPresent
+
+    /**
+     * The same one-time claim for the default income categories (feature 009, research R-002). It
+     * has its own marker, so users seeded before income existed are seeded once too.
+     */
+    fun claimIncomeSeeding(userId: UUID): Boolean =
+        jdbc
+            .sql(
+                "UPDATE users SET income_categories_seeded_at = now() " +
+                    "WHERE id = :id AND income_categories_seeded_at IS NULL RETURNING id",
+            ).param("id", userId)
+            .query(UUID::class.java)
+            .optional()
+            .isPresent
+
+    /** Runs once per user, right after a successful [claimIncomeSeeding], in the same transaction. */
+    fun insertDefaultIncomeCategories(
+        userId: UUID,
+        categories: List<DefaultCategory>,
+    ) {
+        categories.forEach { category ->
+            jdbc
+                .sql(
+                    "INSERT INTO income_categories (user_id, name, is_default, color) " +
+                        "VALUES (:userId, :name, true, :color)",
+                ).param("userId", userId)
+                .param("name", category.name)
+                .param("color", category.color)
+                .update()
+        }
+    }
 
     /** Runs once per user, right after a successful [claimSeeding], in the same transaction. */
     fun insertDefaultCategories(

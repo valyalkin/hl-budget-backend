@@ -20,10 +20,16 @@ tags:
   description: "What the caller's money was spent on, including the 17 defaults"
 - name: Spendings
   description: The caller's spending transactions
+- name: Incomes
+  description: The caller's income entries and their past sources (feature 009)
+- name: Income categories
+  description: "What kind of income it is, including Salary and Investments"
 - name: Totals
-  description: Sums of the caller's spendings by month and by category
+  description: "Sums of the caller's spendings and income by month, category and account"
 - name: Spending imports
   description: "Adding many spendings at once, all or nothing"
+- name: Income imports
+  description: "Adding many income entries at once, all or nothing"
 - name: Merchants
   description: "Merchants derived from the caller's spendings, for autofill"
 - name: Operations
@@ -232,6 +238,225 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/incomes/{incomeId}:
+    get:
+      tags:
+      - Incomes
+      summary: Fetch one of the caller's income entries
+      operationId: getIncome
+      parameters:
+      - name: incomeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: The income entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Income"
+              examples:
+                found:
+                  description: found
+                  value:
+                    id: 9b1e2c3d-4f5a-4b6c-8d7e-0f1a2b3c4d5e
+                    date: 2026-10-15
+                    source: Acme Corp
+                    amount:
+                      amount: "5000.00"
+                      currency: CAD
+                    category:
+                      id: 6e7f8091-2b3c-4d4e-8f5a-6b7c8d9e0f12
+                      name: Salary
+                    account:
+                      id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                      name: Debit card
+                    createdAt: 2026-10-15T14:03:11Z
+                    updatedAt: 2026-10-15T14:03:11Z
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      tags:
+      - Incomes
+      summary: Replace all details of an income entry
+      description: "The income category and the account are each given by id or by\
+        \ name (exactly one of each pair). A name is matched against the caller's\
+        \ income categories or accounts ignoring case and surrounding spaces; a name\
+        \ that matches none, including a spending category's name, is refused with\
+        \ NotFound and nothing is created."
+      operationId: updateIncome
+      parameters:
+      - name: incomeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncomeRequest"
+        required: true
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Income"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/ConcurrentModification"
+        "422":
+          $ref: "#/components/responses/IncomeValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags:
+      - Incomes
+      summary: Delete an income entry permanently
+      operationId: deleteIncome
+      parameters:
+      - name: incomeId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/income-categories/{incomeCategoryId}:
+    get:
+      tags:
+      - Income categories
+      summary: Fetch one of the caller's income categories
+      operationId: getIncomeCategory
+      parameters:
+      - name: incomeCategoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: The income category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeCategory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    put:
+      tags:
+      - Income categories
+      summary: Rename a custom income category; its colour is kept
+      description: "Salary and Investments cannot be renamed: 422 with `details.reason\
+        \ = default-category`."
+      operationId: renameIncomeCategory
+      parameters:
+      - name: incomeCategoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameRequest"
+        required: true
+      responses:
+        "200":
+          description: Renamed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeCategory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/DuplicateNameOrConcurrent"
+        "422":
+          $ref: "#/components/responses/ValidationOrDefaultCategory"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    delete:
+      tags:
+      - Income categories
+      summary: Delete a custom income category that no income entry uses
+      description: "Salary and Investments cannot be deleted: 422 with `details.reason\
+        \ = default-category`."
+      operationId: deleteIncomeCategory
+      parameters:
+      - name: incomeCategoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/IncomeCategoryInUse"
+        "422":
+          $ref: "#/components/responses/DefaultCategory"
         "500":
           $ref: "#/components/responses/InternalError"
         "503":
@@ -728,6 +953,354 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/incomes:
+    get:
+      tags:
+      - Incomes
+      summary: "List the caller's income entries, paged, filtered and sorted"
+      description: "Filters are optional and combine with AND; repeating `categoryId`\
+        \ (income categories) or `accountId` matches any of the given ids. Ties in\
+        \ the sort order are broken by creation time in the same direction, then by\
+        \ id, so paging never skips or repeats an entry."
+      operationId: listIncomes
+      parameters:
+      - name: from
+        in: query
+        description: "Earliest date, inclusive"
+        required: false
+        schema:
+          type: string
+          format: date
+        example: 2026-10-01
+      - name: to
+        in: query
+        description: "Latest date, inclusive; must not be before `from`"
+        required: false
+        schema:
+          type: string
+          format: date
+        example: 2026-10-31
+      - name: categoryId
+        in: query
+        description: Repeatable; matches any of the given income categories
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+      - name: accountId
+        in: query
+        description: Repeatable; matches any of the given accounts
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            format: uuid
+      - name: page
+        in: query
+        description: 0-based page number
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - name: size
+        in: query
+        description: "Items per page, 1 to 100"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+          maximum: 100
+          minimum: 1
+      - name: sort
+        in: query
+        description: Sort order
+        required: false
+        schema:
+          type: string
+          default: "date,desc"
+          enum:
+          - "date,desc"
+          - "date,asc"
+          - "amount,desc"
+          - "amount,asc"
+      responses:
+        "200":
+          description: One page; `items` is empty when nothing matches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomePage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags:
+      - Incomes
+      summary: Record an income entry
+      description: "Send an `Idempotency-Key` to make retries safe: repeating a create\
+        \ with the same key and the same body returns the first entry with 200 and\
+        \ `Idempotent-Replayed: true` instead of creating another. The key is freed\
+        \ when that entry is deleted. The income category and the account are each\
+        \ given by id or by name (exactly one of each pair). A name is matched against\
+        \ the caller's income categories or accounts ignoring case and surrounding\
+        \ spaces; a name that matches none, including a spending category's name,\
+        \ is refused with NotFound and nothing is created."
+      operationId: createIncome
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: "Optional. 1 to 255 visible ASCII characters, unique per create\
+          \ you want deduplicated"
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+          minLength: 1
+          pattern: "^[\\x21-\\x7E]+$"
+        example: 5d1f0c2e-retry-safe
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncomeRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Income"
+              examples:
+                created:
+                  description: created
+                  value:
+                    id: 9b1e2c3d-4f5a-4b6c-8d7e-0f1a2b3c4d5e
+                    date: 2026-10-15
+                    source: Acme Corp
+                    amount:
+                      amount: "5000.00"
+                      currency: CAD
+                    category:
+                      id: 6e7f8091-2b3c-4d4e-8f5a-6b7c8d9e0f12
+                      name: Salary
+                    account:
+                      id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                      name: Debit card
+                    createdAt: 2026-10-15T14:03:11Z
+                    updatedAt: 2026-10-15T14:03:11Z
+        "200":
+          description: A replay of an earlier create with the same Idempotency-Key
+            and body; nothing new was created
+          headers:
+            Idempotent-Replayed:
+              description: Always `true` on a replay
+              style: simple
+              schema:
+                type: string
+                enum:
+                - "true"
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Income"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/IncomeValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/income-imports:
+    post:
+      tags:
+      - Income imports
+      summary: "Record many income entries at once, all or nothing"
+      description: |-
+        Creates every row as an income entry in one step. If any row is invalid, nothing is created and every problem is listed, with a JSON Pointer naming the row (`#/incomes/3/date`).
+
+        Income categories and accounts are given by name. Each name must match one of the caller's income categories or accounts, ignoring case and surrounding spaces; a name that matches none is refused with NotFound at that row, and nothing is created. Categories and accounts are created only through their own endpoints.
+
+        Send an `Idempotency-Key` to make retries safe: repeating an import with the same key and the same rows returns the first import with 200 and `Idempotent-Replayed: true` instead of creating the entries again.
+      operationId: createIncomeImport
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Optional. 1 to 255 visible ASCII characters; a UUID is recommended
+        required: false
+        schema:
+          type: string
+          maxLength: 255
+          minLength: 1
+          pattern: "^[\\x21-\\x7E]+$"
+        example: 6a1d9c2e-8f4b-4b7a-9e3c-1f2d3c4b5a69
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncomeImportRequest"
+            examples:
+              twoRows:
+                description: twoRows
+                value:
+                  incomes:
+                  - date: 2026-10-15
+                    source: Acme Corp
+                    amount:
+                      amount: "5000.00"
+                      currency: CAD
+                    categoryName: Salary
+                    accountName: Debit card
+                  - date: 2026-10-20
+                    source: Wealthsimple
+                    amount:
+                      amount: "120.25"
+                      currency: CAD
+                    categoryName: investments
+                    accountName: Debit card
+        required: true
+      responses:
+        "201":
+          description: Created; every row is now an income entry
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeImport"
+              examples:
+                created:
+                  description: created
+                  value:
+                    id: 4c2d1e0f-9a8b-4c7d-8e6f-5a4b3c2d1e0f
+                    incomeCount: 2
+                    firstDate: 2026-10-15
+                    lastDate: 2026-10-20
+                    total:
+                      amount: "5120.25"
+                      currency: CAD
+                    createdAt: 2026-10-29T14:03:11Z
+        "200":
+          description: A replay of an earlier import with the same Idempotency-Key
+            and rows; nothing new was created
+          headers:
+            Idempotent-Replayed:
+              description: Always `true` on a replay
+              style: simple
+              schema:
+                type: string
+                enum:
+                - "true"
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeImport"
+              examples:
+                replayed:
+                  description: replayed
+                  value:
+                    id: 4c2d1e0f-9a8b-4c7d-8e6f-5a4b3c2d1e0f
+                    incomeCount: 2
+                    firstDate: 2026-10-15
+                    lastDate: 2026-10-20
+                    total:
+                      amount: "5120.25"
+                      currency: CAD
+                    createdAt: 2026-10-29T14:03:11Z
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/IncomeImportValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/income-categories:
+    get:
+      tags:
+      - Income categories
+      summary: "List all of the caller's income categories, sorted by name, with income\
+        \ counts"
+      description: "On the caller's first budgeting call Salary and Investments are\
+        \ created for them, exactly once, so this never returns an empty list. Spending\
+        \ categories are never listed here. Not paged."
+      operationId: listIncomeCategories
+      responses:
+        "200":
+          description: All income categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeCategoryList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+    post:
+      tags:
+      - Income categories
+      summary: Create a custom income category
+      operationId: createIncomeCategory
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NameRequest"
+        required: true
+      responses:
+        "201":
+          description: "Created, with a colour unused among the caller's income categories\
+            \ while any remain"
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+              style: simple
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeCategory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/DuplicateName"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/categories:
     get:
       tags:
@@ -943,6 +1516,63 @@ paths:
           $ref: "#/components/responses/InternalError"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/monthly-income-totals:
+    get:
+      tags:
+      - Totals
+      summary: The caller's income total and entry count for each month of a year
+      description: "Always 12 entries, January to December; a month with no income\
+        \ has a zero total and count. `today` is the current date in the app's time\
+        \ zone. Spendings are never included."
+      operationId: listMonthlyIncomeTotals
+      parameters:
+      - name: year
+        in: query
+        description: "Calendar year, 2000 to 2100; defaults to the current year"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          maximum: 2100
+          minimum: 2000
+        example: 2026
+      responses:
+        "200":
+          description: Twelve months
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeMonthlyTotals"
+              examples:
+                year:
+                  description: year
+                  value:
+                    year: 2026
+                    today: 2026-10-28
+                    months:
+                    - month: 2026-01
+                      total:
+                        amount: "0.00"
+                        currency: CAD
+                      entryCount: 0
+                    - month: 2026-09
+                      total:
+                        amount: "5000.00"
+                        currency: CAD
+                      entryCount: 1
+                    - month: 2026-10
+                      total:
+                        amount: "5320.50"
+                        currency: CAD
+                      entryCount: 3
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/v1/merchants:
     get:
       tags:
@@ -986,6 +1616,243 @@ paths:
                       lastAccount:
                         id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
                         name: Visa
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/income-sources:
+    get:
+      tags:
+      - Incomes
+      summary: "The caller's past income sources, most used first, for autofill"
+      description: "Sources are derived from income entries only (never from spendings):\
+        \ entries whose source is equal ignoring letter case and surrounding spaces\
+        \ count as one. `name`, `lastCategory` and `lastAccount` come from its most\
+        \ recent entry. Ordered by `incomeCount` descending, then name."
+      operationId: listIncomeSources
+      parameters:
+      - name: limit
+        in: query
+        description: "Maximum number of sources returned, 1 to 1000"
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 500
+          maximum: 1000
+          minimum: 1
+      responses:
+        "200":
+          description: Sources; `truncated` is true when more exist than `limit`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeSourceList"
+              examples:
+                sources:
+                  description: sources
+                  value:
+                    truncated: false
+                    items:
+                    - name: Acme Corp
+                      incomeCount: 10
+                      lastUsedOn: 2026-10-15
+                      lastCategory:
+                        id: 6e7f8091-2b3c-4d4e-8f5a-6b7c8d9e0f12
+                        name: Salary
+                      lastAccount:
+                        id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                        name: Debit card
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/income-imports/{importId}:
+    get:
+      tags:
+      - Income imports
+      summary: One of the caller's income imports
+      description: "The summary recorded when the import was created. It does not\
+        \ change when the imported entries are later edited or deleted. Another user's\
+        \ import is 404, like an unknown id."
+      operationId: getIncomeImport
+      parameters:
+      - name: importId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        example: 9b2f6e1a-4c3d-4e5f-8a7b-0c1d2e3f4a5b
+      responses:
+        "200":
+          description: The import
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeImport"
+              examples:
+                found:
+                  description: found
+                  value:
+                    id: 4c2d1e0f-9a8b-4c7d-8e6f-5a4b3c2d1e0f
+                    incomeCount: 2
+                    firstDate: 2026-10-15
+                    lastDate: 2026-10-20
+                    total:
+                      amount: "5120.25"
+                      currency: CAD
+                    createdAt: 2026-10-29T14:03:11Z
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/income-category-totals:
+    get:
+      tags:
+      - Totals
+      summary: The caller's income per income category over a date range
+      description: "One entry per income category with income in the range, and only\
+        \ those; largest total first, ties by name. The same range rules as /api/v1/category-totals.\
+        \ Not paged: bounded by the caller's income category count."
+      operationId: listIncomeCategoryTotals
+      parameters:
+      - name: from
+        in: query
+        description: "Earliest date, inclusive"
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-10-01
+      - name: to
+        in: query
+        description: "Latest date, inclusive; not before `from`, at most 366 days\
+          \ after it"
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-10-31
+      responses:
+        "200":
+          description: Totals per income category; `items` is empty when nothing was
+            received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeCategoryTotals"
+              examples:
+                october:
+                  description: october
+                  value:
+                    from: 2026-10-01
+                    to: 2026-10-31
+                    total:
+                      amount: "5320.50"
+                      currency: CAD
+                    entryCount: 3
+                    items:
+                    - category:
+                        id: 6e7f8091-2b3c-4d4e-8f5a-6b7c8d9e0f12
+                        name: Salary
+                      total:
+                        amount: "5000.00"
+                        currency: CAD
+                      entryCount: 1
+                      color: "#1e5b45"
+                    - category:
+                        id: 5d6e7f80-1a2b-4c3d-9e4f-5a6b7c8d9e01
+                        name: Investments
+                      total:
+                        amount: "320.50"
+                        currency: CAD
+                      entryCount: 2
+                      color: "#1d4ed8"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/income-account-totals:
+    get:
+      tags:
+      - Totals
+      summary: The caller's income per account over a date range
+      description: "One entry per account that received income in the range, and only\
+        \ those; largest total first, ties by name, each with the account's colour.\
+        \ The same range rules as /api/v1/account-totals. Not paged: bounded by the\
+        \ caller's account count."
+      operationId: listIncomeAccountTotals
+      parameters:
+      - name: from
+        in: query
+        description: "Earliest date, inclusive"
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-10-01
+      - name: to
+        in: query
+        description: "Latest date, inclusive; not before `from`, at most 366 days\
+          \ after it"
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-10-31
+      responses:
+        "200":
+          description: Totals per account; `items` is empty when nothing was received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncomeAccountTotals"
+              examples:
+                october:
+                  description: october
+                  value:
+                    from: 2026-10-01
+                    to: 2026-10-31
+                    total:
+                      amount: "5320.50"
+                      currency: CAD
+                    entryCount: 3
+                    items:
+                    - account:
+                        id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                        name: Debit card
+                      total:
+                        amount: "5000.00"
+                        currency: CAD
+                      entryCount: 1
+                      color: "#e11d48"
+                    - account:
+                        id: 8b3e0f52-6d4c-4a9b-c2f7-3e5d9a1b0c44
+                        name: Brokerage
+                      total:
+                        amount: "320.50"
+                        currency: CAD
+                      entryCount: 2
+                      color: "#0891b2"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "422":
@@ -1389,6 +2256,103 @@ components:
       - id
       - merchant
       - updatedAt
+    IncomeRequest:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          description: "Today or earlier, in the app's time zone"
+          example: 2026-10-15
+        source:
+          type: string
+          description: Who paid it
+          example: Acme Corp
+          maxLength: 255
+          minLength: 0
+        amount:
+          $ref: "#/components/schemas/Money"
+        categoryId:
+          type:
+          - string
+          - "null"
+          format: uuid
+          description: One of the caller's income categories. Give exactly one of
+            categoryId and categoryName
+          example: 6e7f8091-2b3c-4d4e-8f5a-6b7c8d9e0f12
+        accountId:
+          type:
+          - string
+          - "null"
+          format: uuid
+          description: One of the caller's accounts. Give exactly one of accountId
+            and accountName
+          example: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+        categoryName:
+          type:
+          - string
+          - "null"
+          description: "Instead of categoryId: matched against the caller's income\
+            \ categories ignoring case and surrounding spaces. Refused (422, NotFound)\
+            \ when none matches, including a spending category's name; never creates\
+            \ a category"
+          example: Salary
+          maxLength: 50
+          minLength: 0
+        accountName:
+          type:
+          - string
+          - "null"
+          description: "Instead of accountId: matched against the caller's accounts\
+            \ ignoring case and surrounding spaces. Refused (422, NotFound) when none\
+            \ matches; never creates an account"
+          example: Debit card
+          maxLength: 50
+          minLength: 0
+      required:
+      - amount
+      - date
+      - source
+    Income:
+      type: object
+      description: One of the caller's income entries
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 9b1e2c3d-4f5a-4b6c-8d7e-0f1a2b3c4d5e
+        date:
+          type: string
+          format: date
+          example: 2026-10-15
+        source:
+          type: string
+          description: Who paid it
+          example: Acme Corp
+        amount:
+          $ref: "#/components/schemas/Money"
+        category:
+          $ref: "#/components/schemas/Ref"
+          description: One of the caller's income categories
+        account:
+          $ref: "#/components/schemas/Ref"
+        createdAt:
+          type: string
+          format: date-time
+          example: 2026-10-15T14:03:11Z
+        updatedAt:
+          type: string
+          format: date-time
+          example: 2026-10-15T14:03:11Z
+      required:
+      - account
+      - amount
+      - category
+      - createdAt
+      - date
+      - id
+      - source
+      - updatedAt
     NameRequest:
       type: object
       properties:
@@ -1399,6 +2363,43 @@ components:
           maxLength: 50
           minLength: 0
       required:
+      - name
+    IncomeCategory:
+      type: object
+      description: What kind of income it is; a separate list from spending categories
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 6e7f8091-2b3c-4d4e-8f5a-6b7c8d9e0f12
+        name:
+          type: string
+          example: Salary
+          maxLength: 50
+        incomeCount:
+          type: integer
+          format: int64
+          description: How many of the caller's income entries use this category
+          minimum: 0
+          readOnly: true
+        color:
+          type: string
+          description: The category's colour in charts. Fixed for Salary and Investments;
+            assigned once to a custom income category when it is created and kept
+            after renaming
+          example: "#1e5b45"
+          pattern: "^#[0-9a-f]{6}$"
+          readOnly: true
+        isDefault:
+          type: boolean
+          description: "True for Salary and Investments, which every user starts with;\
+            \ they cannot be renamed or deleted"
+          readOnly: true
+      required:
+      - color
+      - id
+      - incomeCount
+      - isDefault
       - name
     Category:
       type: object
@@ -1462,9 +2463,16 @@ components:
           example: "#e11d48"
           pattern: "^#[0-9a-f]{6}$"
           readOnly: true
+        incomeCount:
+          type: integer
+          format: int64
+          description: How many of the caller's income entries use this account
+          minimum: 0
+          readOnly: true
       required:
       - color
       - id
+      - incomeCount
       - name
       - spendingCount
     SpendingImportRequest:
@@ -1575,6 +2583,96 @@ components:
       - lastDate
       - spendingCount
       - total
+    IncomeImportRequest:
+      type: object
+      description: "The income rows to import, in the order the user reviewed them"
+      properties:
+        incomes:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeImportRow"
+          maxItems: 1000
+          minItems: 1
+      required:
+      - incomes
+    IncomeImportRow:
+      type: object
+      description: "One income entry. The same rules as IncomeRequest, with category\
+        \ and account by name"
+      properties:
+        date:
+          type: string
+          format: date
+          description: "Today or earlier, in the app's time zone"
+          example: 2026-10-15
+        source:
+          type: string
+          example: Acme Corp
+          maxLength: 255
+          minLength: 0
+        amount:
+          $ref: "#/components/schemas/Money"
+        categoryName:
+          type: string
+          description: "Matched against the caller's income categories ignoring case\
+            \ and surrounding spaces. Refused (422, NotFound) when none matches; never\
+            \ creates a category"
+          example: Salary
+          maxLength: 50
+          minLength: 0
+        accountName:
+          type: string
+          description: "Matched against the caller's accounts ignoring case and surrounding\
+            \ spaces. Refused (422, NotFound) when none matches; never creates an\
+            \ account"
+          example: Debit card
+          maxLength: 50
+          minLength: 0
+      required:
+      - accountName
+      - amount
+      - categoryName
+      - date
+      - source
+    IncomeImport:
+      type: object
+      description: The receipt of a completed income import. Holds nothing from the
+        file
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 4c2d1e0f-9a8b-4c7d-8e6f-5a4b3c2d1e0f
+        incomeCount:
+          type: integer
+          format: int32
+          description: How many income entries were created
+          example: 2
+          maximum: 1000
+          minimum: 1
+        firstDate:
+          type: string
+          format: date
+          description: The earliest date in the import
+          example: 2026-10-15
+        lastDate:
+          type: string
+          format: date
+          description: The latest date in the import; clients show this month afterwards
+          example: 2026-10-20
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        createdAt:
+          type: string
+          format: date-time
+          example: 2026-10-29T14:03:11Z
+      required:
+      - createdAt
+      - firstDate
+      - id
+      - incomeCount
+      - lastDate
+      - total
     SpendingPage:
       type: object
       description: One page of the caller's spendings; `items` is empty when nothing
@@ -1649,6 +2747,49 @@ components:
       - months
       - today
       - year
+    IncomeMonthTotal:
+      type: object
+      description: One month's income; zero when nothing was received
+      properties:
+        month:
+          type: string
+          example: 2026-10
+          pattern: "^\\d{4}-\\d{2}$"
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        entryCount:
+          type: integer
+          format: int64
+          description: How many income entries make up the total
+          example: 3
+          minimum: 0
+      required:
+      - entryCount
+      - month
+      - total
+    IncomeMonthlyTotals:
+      type: object
+      description: "Income for every month of a year, January to December"
+      properties:
+        year:
+          type: integer
+          format: int32
+          example: 2026
+        today:
+          type: string
+          format: date
+          description: Today in the app's time zone
+          example: 2026-10-28
+        months:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeMonthTotal"
+          maxItems: 12
+          minItems: 12
+      required:
+      - months
+      - today
+      - year
     Merchant:
       type: object
       description: A merchant derived from the caller's spendings
@@ -1692,6 +2833,195 @@ components:
       required:
       - items
       - truncated
+    IncomePage:
+      type: object
+      description: One page of the caller's income entries; `items` is empty when
+        nothing matches
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Income"
+        page:
+          type: integer
+          format: int32
+          description: 0-based page number
+          minimum: 0
+        size:
+          type: integer
+          format: int32
+          maximum: 100
+          minimum: 1
+        totalItems:
+          type: integer
+          format: int64
+          description: "Income entries matching the filters, across all pages"
+        totalPages:
+          type: integer
+          format: int32
+      required:
+      - items
+      - page
+      - size
+      - totalItems
+      - totalPages
+    IncomeSource:
+      type: object
+      description: "A source derived from the caller's income entries: entries whose\
+        \ source is equal ignoring case and surrounding spaces. `name`, `lastCategory`\
+        \ and `lastAccount` come from the most recent one"
+      properties:
+        name:
+          type: string
+          example: Acme Corp
+        incomeCount:
+          type: integer
+          format: int64
+          description: How many of the caller's income entries have this source
+          minimum: 1
+        lastUsedOn:
+          type: string
+          format: date
+          example: 2026-10-15
+        lastCategory:
+          $ref: "#/components/schemas/Ref"
+        lastAccount:
+          $ref: "#/components/schemas/Ref"
+      required:
+      - incomeCount
+      - lastAccount
+      - lastCategory
+      - lastUsedOn
+      - name
+    IncomeSourceList:
+      type: object
+      description: "Sources, most used first; `truncated` is true when more exist"
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeSource"
+        truncated:
+          type: boolean
+      required:
+      - items
+      - truncated
+    IncomeCategoryTotal:
+      type: object
+      description: One income category's income in the range
+      properties:
+        category:
+          $ref: "#/components/schemas/Ref"
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        entryCount:
+          type: integer
+          format: int64
+          example: 1
+          minimum: 1
+        color:
+          type: string
+          description: "The income category's colour, the same as IncomeCategory.color"
+          example: "#1e5b45"
+          pattern: "^#[0-9a-f]{6}$"
+      required:
+      - category
+      - color
+      - entryCount
+      - total
+    IncomeCategoryTotals:
+      type: object
+      description: "Income per income category over a date range: only categories\
+        \ with income, largest first"
+      properties:
+        from:
+          type: string
+          format: date
+          example: 2026-10-01
+        to:
+          type: string
+          format: date
+          example: 2026-10-31
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        entryCount:
+          type: integer
+          format: int64
+          example: 3
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeCategoryTotal"
+      required:
+      - entryCount
+      - from
+      - items
+      - to
+      - total
+    IncomeCategoryList:
+      type: object
+      description: "All of the caller's income categories, sorted by name (never paged)"
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeCategory"
+      required:
+      - items
+    IncomeAccountTotal:
+      type: object
+      description: One account's income in the range
+      properties:
+        account:
+          $ref: "#/components/schemas/Ref"
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        entryCount:
+          type: integer
+          format: int64
+          example: 2
+          minimum: 1
+        color:
+          type: string
+          description: "The account's colour, the same as Account.color"
+          example: "#e11d48"
+          pattern: "^#[0-9a-f]{6}$"
+      required:
+      - account
+      - color
+      - entryCount
+      - total
+    IncomeAccountTotals:
+      type: object
+      description: "Income per account over a date range: only accounts that received\
+        \ income, largest first"
+      properties:
+        from:
+          type: string
+          format: date
+          example: 2026-10-01
+        to:
+          type: string
+          format: date
+          example: 2026-10-31
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        entryCount:
+          type: integer
+          format: int64
+          example: 3
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomeAccountTotal"
+      required:
+      - entryCount
+      - from
+      - items
+      - to
+      - total
     CategoryTotal:
       type: object
       description: One category's spending in the range
@@ -1997,8 +3327,9 @@ components:
                 details:
                   reason: concurrent-modification
     InUse:
-      description: "Spendings still use this account or category; move or delete them\
-        \ first (`details.reason = in-use`, `details.spendingCount`)"
+      description: "Entries still use this account or category; move or delete them\
+        \ first (`details.reason = in-use`, `details.spendingCount`; for an account\
+        \ also `details.incomeCount`, the income entries that use it)"
       headers:
         X-Request-Id:
           $ref: "#/components/headers/X-Request-Id"
@@ -2007,6 +3338,20 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
           examples:
+            inUseByIncome:
+              value:
+                type: urn:problem:hl-budget:conflict
+                title: Conflict
+                status: 409
+                detail: Account 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11 is used by 2
+                  income entries
+                instance: /api/v1/accounts/3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: in-use
+                  spendingCount: 0
+                  incomeCount: 2
             inUse:
               value:
                 type: urn:problem:hl-budget:conflict
@@ -2266,6 +3611,86 @@ components:
                 traceId: 4be0baf6ee174255
                 details:
                   reason: idempotency-key-reused
+    IncomeValidationFailed:
+      description: "Invalid fields, each listed in `errors`, with the same codes as\
+        \ SpendingValidationFailed. NotFound marks an unknown or another user's income\
+        \ category or account, by id or by name; a spending category's name is not\
+        \ an income category, and a name never creates one. On create only, `details.reason\
+        \ = idempotency-key-reused` when the Idempotency-Key was already used for\
+        \ a different income"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            unknownCategoryName:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "1 field is invalid: categoryName"
+                instance: /api/v1/incomes
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/categoryName"
+                  field: categoryName
+                  code: NotFound
+                  message: is not one of your income categories
+    IncomeImportValidationFailed:
+      description: "Nothing was created. Every invalid field of every row is listed\
+        \ in `errors`, its pointer naming the row by its 0-based position (`#/incomes/3/amount/amount`),\
+        \ with the codes of SpendingImportValidationFailed; NotFound on a name that\
+        \ matches none of the caller's income categories or accounts"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            unknownCategory:
+              value:
+                type: urn:problem:hl-budget:unprocessable-entity
+                title: Unprocessable Content
+                status: 422
+                detail: "1 field is invalid: incomes[1].categoryName"
+                instance: /api/v1/income-imports
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                errors:
+                - pointer: "#/incomes/1/categoryName"
+                  field: "incomes[1].categoryName"
+                  code: NotFound
+                  message: is not one of your income categories
+    IncomeCategoryInUse:
+      description: "Income entries still use this income category; move or delete\
+        \ them first (`details.reason = in-use`, `details.incomeCount`)"
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/X-Request-Id"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            inUse:
+              value:
+                type: urn:problem:hl-budget:conflict
+                title: Conflict
+                status: 409
+                detail: Income category 7f8091a2-3c4d-4e5f-9a6b-7c8d9e0f1a23 is used
+                  by 1 income entries
+                instance: /api/v1/income-categories/7f8091a2-3c4d-4e5f-9a6b-7c8d9e0f1a23
+                timestamp: 2026-10-27T14:03:11Z
+                traceId: 4be0baf6ee174255
+                details:
+                  reason: in-use
+                  incomeCount: 1
   examples:
     ProfileFirstVisit:
       summary: First call creates the record

@@ -1,5 +1,6 @@
 package com.valyalkin.hlbudget.service
 
+import com.valyalkin.hlbudget.model.Ledger
 import com.valyalkin.hlbudget.model.Merchant
 import com.valyalkin.hlbudget.model.MerchantList
 import com.valyalkin.hlbudget.model.Ref
@@ -8,7 +9,11 @@ import com.valyalkin.hlbudget.repository.spending.MerchantQueries
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
-/** The caller's past merchants for autofill (feature 003, FR-057, FR-058, research R-005). */
+/**
+ * The caller's past merchants for autofill (feature 003, FR-057, FR-058, research R-005), and with
+ * [Ledger.INCOMES] their past income sources (feature 009, FR-063): `spendingCount` then counts
+ * income entries.
+ */
 @Service
 @Transactional
 class MerchantService(
@@ -19,8 +24,9 @@ class MerchantService(
     fun mostUsed(
         identity: VerifiedIdentity,
         limit: Int,
+        ledger: Ledger = Ledger.SPENDINGS,
     ): MerchantList {
-        val rows = queries.mostUsed(currentUser.resolve(identity), limit + 1)
+        val rows = queries.mostUsed(currentUser.resolve(identity), limit + 1, ledger)
         val items =
             rows.take(limit).map {
                 Merchant(

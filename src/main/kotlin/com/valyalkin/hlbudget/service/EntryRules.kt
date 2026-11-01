@@ -16,11 +16,12 @@ import java.util.Locale
 import java.util.UUID
 
 /**
- * The spending rules that need the clock or configuration, so Bean Validation cannot check them
+ * The rules spendings and income share (feature 009, research R-004) that need the clock or
+ * configuration, so Bean Validation cannot check them
  * (research R-006), and the fingerprint that tells a retry from a reused key (research R-007).
  */
 @Component
-class SpendingRules(
+class EntryRules(
     private val clock: Clock,
     properties: HlBudgetProperties,
 ) {
@@ -33,12 +34,22 @@ class SpendingRules(
     fun violations(command: SpendingCommand): List<FieldViolation> =
         violations(command.date, command.amount, command.currency, pointer = "#", field = "")
 
-    /** The same rules for row [index] of an import, pointing into that row (feature 004, R-007). */
+    /**
+     * The same rules for row [index] of an import, pointing into that row of [collection]
+     * (`spendings` or `incomes`; feature 004, R-007).
+     */
     fun violations(
         row: ImportRowCommand,
         index: Int,
+        collection: String = "spendings",
     ): List<FieldViolation> =
-        violations(row.date, row.amount, row.currency, pointer = "#/spendings/$index", field = "spendings[$index].")
+        violations(
+            row.date,
+            row.amount,
+            row.currency,
+            pointer = "#/$collection/$index",
+            field = "$collection[$index].",
+        )
 
     private fun violations(
         date: LocalDate,
@@ -61,13 +72,13 @@ class SpendingRules(
                     ),
                 )
             }
-            if (currency != this@SpendingRules.currency.currencyCode) {
+            if (currency != this@EntryRules.currency.currencyCode) {
                 add(
                     FieldViolation(
                         "$pointer/amount/currency",
                         "${field}amount.currency",
                         "UnsupportedCurrency",
-                        "must be ${this@SpendingRules.currency.currencyCode}",
+                        "must be ${this@EntryRules.currency.currencyCode}",
                     ),
                 )
             }

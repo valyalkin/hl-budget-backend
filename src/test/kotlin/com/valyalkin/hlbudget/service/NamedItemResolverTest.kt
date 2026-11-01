@@ -3,12 +3,15 @@ package com.valyalkin.hlbudget.service
 import com.valyalkin.hlbudget.error.FieldViolation
 import com.valyalkin.hlbudget.error.ValidationException
 import com.valyalkin.hlbudget.model.ImportRowCommand
+import com.valyalkin.hlbudget.model.Ledger
 import com.valyalkin.hlbudget.model.Ref
 import com.valyalkin.hlbudget.model.SpendingCommand
 import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.category.CategoryEntity
 import com.valyalkin.hlbudget.repository.category.CategoryRepository
+import com.valyalkin.hlbudget.repository.incomecategory.IncomeCategoryEntity
+import com.valyalkin.hlbudget.repository.incomecategory.IncomeCategoryRepository
 import io.mockk.every
 import io.mockk.mockk
 import org.assertj.core.api.Assertions.assertThat
@@ -24,7 +27,8 @@ class NamedItemResolverTest {
     private val now = Instant.parse("2026-10-27T15:00:00Z")
     private val categories = mockk<CategoryRepository>()
     private val accounts = mockk<AccountRepository>()
-    private val resolver = NamedItemResolver(categories, accounts)
+    private val incomeCategories = mockk<IncomeCategoryRepository>()
+    private val resolver = NamedItemResolver(categories, accounts, incomeCategories)
 
     private val userId = UUID.randomUUID()
     private val groceries =
@@ -165,5 +169,58 @@ class NamedItemResolverTest {
                 resolver.resolve(userId, command(categoryName = "Coffee", accountId = UUID.randomUUID()), earlier)
             },
         ).containsExactly("#/date NotFuture", "#/categoryName NotFound", "#/accountId NotFound")
+    }
+
+    private val salary = IncomeCategoryEntity(UUID.randomUUID(), userId, "Salary", true, "#1e5b45", now, now, 0)
+
+    @Test
+    fun `for income, the category is matched against income categories by id or by name (feature 009)`() {
+        every { incomeCategories.findByIdAndUserId(salary.id, userId) } returns salary
+        every { incomeCategories.findByUserIdAndNameIgnoreCase(userId, "salary") } returns salary
+        every { accounts.findByIdAndUserId(amex.id, userId) } returns amex
+
+        val byId = resolver.resolve(userId, command(salary.id, amex.id), emptyList(), Ledger.INCOMES)
+        val byName =
+            resolver.resolve(userId, command(categoryName = "salary", accountId = amex.id), emptyList(), Ledger.INCOMES)
+
+        assertThat(byId.first).isEqualTo(Ref(salary.id, "Salary"))
+        assertThat(byName.first).isEqualTo(Ref(salary.id, "Salary"))
+    }
+
+    @Test
+    fun `for income, a spending category is not one of your income categories`() {
+        every { incomeCategories.findByUserIdAndNameIgnoreCase(userId, "Groceries") } returns null
+        every { accounts.findByIdAndUserId(amex.id, userId) } returns amex
+
+        assertThatThrownBy {
+            resolver.resolve(
+                userId,
+                command(categoryName = "Groceries", accountId = amex.id),
+                emptyList(),
+                Ledger.INCOMES,
+            )
+        }.isInstanceOfSatisfying(ValidationException::class.java) { exception ->
+            assertThat(exception.violations.single().message).isEqualTo("is not one of your income categories")
+        }
+    }
+
+    @Test
+    fun `income import names are checked against income categories, pointing into incomes`() {
+        every { incomeCategories.findAllByUserId(userId) } returns listOf(salary)
+        every { accounts.findAllByUserId(userId) } returns listOf(amex)
+        val maps = resolver.names(userId, Ledger.INCOMES)
+        val row = ImportRowCommand(LocalDate.parse("2026-10-15"), "Acme", BigDecimal.TEN, "CAD", "Groceries", "amex")
+
+        val violations = maps.violations(row, 2)
+
+        assertThat(violations).containsExactly(
+            FieldViolation(
+                "#/incomes/2/categoryName",
+                "incomes[2].categoryName",
+                "NotFound",
+                "is not one of your income categories",
+            ),
+        )
+        assertThat(maps.account("AMEX")).isEqualTo(Ref(amex.id, "Amex"))
     }
 }

@@ -27,7 +27,7 @@ class TotalsServiceTest {
     // 03:00 UTC on 1 November is still 31 October in Toronto.
     private val clock = Clock.fixed(Instant.parse("2026-11-01T03:00:00Z"), ZoneOffset.UTC)
     private val rules =
-        SpendingRules(
+        EntryRules(
             clock,
             HlBudgetProperties(
                 HlBudgetProperties.Auth("i", "a", "j", "n"),

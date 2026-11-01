@@ -33,7 +33,7 @@ class SpendingImportService(
     private val importInserts: SpendingImportInserts,
     private val spendingInserts: SpendingInserts,
     private val names: NamedItemResolver,
-    private val rules: SpendingRules,
+    private val rules: EntryRules,
     private val clock: Clock,
 ) {
     /**

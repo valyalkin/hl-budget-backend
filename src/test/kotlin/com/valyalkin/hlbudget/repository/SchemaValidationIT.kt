@@ -13,13 +13,13 @@ import java.util.UUID
  */
 class SchemaValidationIT : AbstractIntegrationTest() {
     @Test
-    fun `V1 to V6 applied cleanly`() {
+    fun `V1 to V7 applied cleanly`() {
         val applied =
             jdbcTemplate.queryForList(
                 "SELECT version, success FROM flyway_schema_history ORDER BY installed_rank",
             )
 
-        assertThat(applied.map { it["version"] }).containsExactly("1", "2", "3", "4", "5", "6")
+        assertThat(applied.map { it["version"] }).containsExactly("1", "2", "3", "4", "5", "6", "7")
         assertThat(applied).allSatisfy({ assertThat(it["success"]).isEqualTo(true) })
     }
 
@@ -42,8 +42,10 @@ class SchemaValidationIT : AbstractIntegrationTest() {
             "last_seen_at",
             "version",
             "categories_seeded_at",
+            "income_categories_seeded_at",
         )
         assertThat(columns.getValue("categories_seeded_at")["is_nullable"]).isEqualTo("YES")
+        assertThat(columns.getValue("income_categories_seeded_at")["is_nullable"]).isEqualTo("YES")
         assertThat(columns.getValue("id")["data_type"]).isEqualTo("uuid")
         assertThat(columns.getValue("auth0_subject")["character_maximum_length"]).isEqualTo(255)
         assertThat(columns.getValue("auth0_subject")["is_nullable"]).isEqualTo("NO")

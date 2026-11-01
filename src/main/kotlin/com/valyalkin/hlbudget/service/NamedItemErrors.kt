@@ -34,11 +34,32 @@ internal fun inUse(
     id: UUID,
     count: Long,
     cause: Throwable? = null,
-) = ConflictException(
-    "${resource.replaceFirstChar(Char::uppercase)} $id is used by $count spendings",
-    mapOf("reason" to "in-use", "spendingCount" to count),
-    cause,
-)
+) = inUse(resource, id, mapOf(SPENDING_COUNT to count), cause)
+
+/**
+ * The in-use refusal with one count per kind of entry (feature 009, FR-052): `spendingCount`,
+ * `incomeCount` or both, each put in `details`. The message names only the non-zero ones.
+ */
+internal fun inUse(
+    resource: String,
+    id: UUID,
+    counts: Map<String, Long>,
+    cause: Throwable? = null,
+): ConflictException {
+    val used =
+        counts
+            .filterValues { it > 0 }
+            .map { (key, n) -> "$n ${if (key == INCOME_COUNT) "income entries" else "spendings"}" }
+            .ifEmpty { listOf("entries") }
+    return ConflictException(
+        "${resource.replaceFirstChar(Char::uppercase)} $id is used by ${used.joinToString(" and ")}",
+        mapOf<String, Any>("reason" to "in-use") + counts,
+        cause,
+    )
+}
+
+internal const val SPENDING_COUNT = "spendingCount"
+internal const val INCOME_COUNT = "incomeCount"
 
 /** The caller's only account cannot be deleted (feature 003, FR-086, research R-006). */
 internal fun lastAccount(id: UUID) =

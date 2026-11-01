@@ -1,6 +1,7 @@
 package com.valyalkin.hlbudget.service
 
 import com.valyalkin.hlbudget.model.DefaultCategories
+import com.valyalkin.hlbudget.model.DefaultIncomeCategories
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.CurrentUserRepository
 import com.valyalkin.hlbudget.repository.CurrentUserRow
@@ -19,13 +20,17 @@ class CurrentUserService(
     /**
      * Joins the caller's transaction, so a rollback there also undoes a first-call insert. On the
      * caller's first budgeting call this also creates their 17 default categories, exactly once
-     * even under concurrent first calls (research R-003).
+     * even under concurrent first calls (research R-003), and their default income categories, by
+     * the same rule with their own marker (feature 009, research R-002).
      */
     @Transactional
     fun resolve(identity: VerifiedIdentity): UUID {
         val user = row(identity)
         if (user.categoriesSeededAt == null && users.claimSeeding(user.id)) {
             users.insertDefaultCategories(user.id, DefaultCategories.ALL)
+        }
+        if (user.incomeCategoriesSeededAt == null && users.claimIncomeSeeding(user.id)) {
+            users.insertDefaultIncomeCategories(user.id, DefaultIncomeCategories.ALL)
         }
         return user.id
     }
