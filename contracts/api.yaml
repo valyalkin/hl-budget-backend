@@ -1345,12 +1345,20 @@ components:
           description: How many of the caller's spendings use this category
           minimum: 0
           readOnly: true
+        color:
+          type: string
+          description: The category's colour in charts. Fixed for the 17 defaults;
+            assigned once to a custom category when it is created and kept after renaming
+          example: "#1e5b45"
+          pattern: "^#[0-9a-f]{6}$"
+          readOnly: true
         isDefault:
           type: boolean
           description: True for the 17 categories every user starts with; they cannot
             be renamed or deleted
           readOnly: true
       required:
+      - color
       - id
       - isDefault
       - name
@@ -1613,8 +1621,14 @@ components:
           format: int64
           example: 2
           minimum: 1
+        color:
+          type: string
+          description: "The category's colour, the same as Category.color"
+          example: "#c2410c"
+          pattern: "^#[0-9a-f]{6}$"
       required:
       - category
+      - color
       - spendingCount
       - total
     CategoryTotals:

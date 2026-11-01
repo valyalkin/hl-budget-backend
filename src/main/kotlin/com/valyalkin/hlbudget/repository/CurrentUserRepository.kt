@@ -1,5 +1,6 @@
 package com.valyalkin.hlbudget.repository
 
+import com.valyalkin.hlbudget.model.DefaultCategory
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Repository
 import java.time.Instant
@@ -58,13 +59,15 @@ class CurrentUserRepository(
     /** Runs once per user, right after a successful [claimSeeding], in the same transaction. */
     fun insertDefaultCategories(
         userId: UUID,
-        names: List<String>,
+        categories: List<DefaultCategory>,
     ) {
-        names.forEach { name ->
+        categories.forEach { category ->
             jdbc
-                .sql("INSERT INTO categories (user_id, name, is_default) VALUES (:userId, :name, true)")
-                .param("userId", userId)
-                .param("name", name)
+                .sql(
+                    "INSERT INTO categories (user_id, name, is_default, color) VALUES (:userId, :name, true, :color)",
+                ).param("userId", userId)
+                .param("name", category.name)
+                .param("color", category.color)
                 .update()
         }
     }

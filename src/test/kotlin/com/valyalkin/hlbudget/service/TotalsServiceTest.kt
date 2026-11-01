@@ -80,13 +80,14 @@ class TotalsServiceTest {
         val to = LocalDate.parse("2026-10-31")
         every { queries.byCategory(userId, from, to) } returns
             listOf(
-                CategoryTotalRow(UUID.randomUUID(), "Rent", BigDecimal("2150.00"), 1),
-                CategoryTotalRow(UUID.randomUUID(), "Groceries", BigDecimal("176.44"), 2),
+                CategoryTotalRow(UUID.randomUUID(), "Rent", "#1e5b45", BigDecimal("2150.00"), 1),
+                CategoryTotalRow(UUID.randomUUID(), "Groceries", "#c2410c", BigDecimal("176.44"), 2),
             )
 
         val totals = service.byCategory(identity, from, to)
 
         assertThat(totals.items.map { it.category.name }).containsExactly("Rent", "Groceries")
+        assertThat(totals.items.map { it.color }).containsExactly("#1e5b45", "#c2410c")
         assertThat(totals.total.amount).isEqualByComparingTo("2326.44")
         assertThat(totals.spendingCount).isEqualTo(3)
     }

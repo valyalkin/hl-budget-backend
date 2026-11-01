@@ -32,7 +32,7 @@ class NamedItemResolverTest {
     private val resolver = NamedItemResolver(categories, accounts, inserts, Clock.fixed(now, ZoneOffset.UTC))
 
     private val userId = UUID.randomUUID()
-    private val groceries = CategoryEntity(UUID.randomUUID(), userId, "Groceries", true, now, now, 0)
+    private val groceries = CategoryEntity(UUID.randomUUID(), userId, "Groceries", true, "#c2410c", now, now, 0)
     private val amex = AccountEntity(UUID.randomUUID(), userId, "Amex", now, now, 0)
 
     private fun command(

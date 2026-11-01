@@ -22,6 +22,15 @@ data class CategoryResponse(
         minimum = "0",
     )
     val spendingCount: Long,
+    @field:Schema(
+        description =
+            "The category's colour in charts. Fixed for the 17 defaults; assigned once to a custom " +
+                "category when it is created and kept after renaming",
+        accessMode = Schema.AccessMode.READ_ONLY,
+        example = "#1e5b45",
+        pattern = "^#[0-9a-f]{6}$",
+    )
+    val color: String,
 )
 
 @Schema(name = "CategoryList", description = "All of the caller's categories, sorted by name (never paged)")

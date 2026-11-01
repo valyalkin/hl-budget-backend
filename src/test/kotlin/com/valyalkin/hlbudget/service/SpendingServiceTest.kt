@@ -49,7 +49,7 @@ class SpendingServiceTest {
 
     private val identity = VerifiedIdentity("auth0|alice", null, null, null)
     private val userId = UUID.randomUUID()
-    private val category = CategoryEntity(UUID.randomUUID(), userId, "Groceries", true, now, now, 0)
+    private val category = CategoryEntity(UUID.randomUUID(), userId, "Groceries", true, "#c2410c", now, now, 0)
     private val account = AccountEntity(UUID.randomUUID(), userId, "Amex", now, now, 0)
     private val command =
         SpendingCommand(LocalDate.parse("2026-10-20"), "Loblaws", BigDecimal("84.37"), "CAD", category.id, account.id)

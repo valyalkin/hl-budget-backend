@@ -13,13 +13,13 @@ import java.util.UUID
  */
 class SchemaValidationIT : AbstractIntegrationTest() {
     @Test
-    fun `V1 to V4 applied cleanly`() {
+    fun `V1 to V5 applied cleanly`() {
         val applied =
             jdbcTemplate.queryForList(
                 "SELECT version, success FROM flyway_schema_history ORDER BY installed_rank",
             )
 
-        assertThat(applied.map { it["version"] }).containsExactly("1", "2", "3", "4")
+        assertThat(applied.map { it["version"] }).containsExactly("1", "2", "3", "4", "5")
         assertThat(applied).allSatisfy({ assertThat(it["success"]).isEqualTo(true) })
     }
 
@@ -171,7 +171,18 @@ class SchemaValidationIT : AbstractIntegrationTest() {
         assertThat(columnsOf("accounts").keys)
             .containsExactlyInAnyOrder("id", "user_id", "name", "created_at", "updated_at", "version")
         assertThat(columnsOf("categories").keys)
-            .containsExactlyInAnyOrder("id", "user_id", "name", "is_default", "created_at", "updated_at", "version")
+            .containsExactlyInAnyOrder(
+                "id",
+                "user_id",
+                "name",
+                "is_default",
+                "created_at",
+                "updated_at",
+                "version",
+                "color",
+            )
+        assertThat(columnsOf("categories").getValue("color")["character_maximum_length"]).isEqualTo(7)
+        assertThat(columnsOf("categories").getValue("color")["is_nullable"]).isEqualTo("NO")
         val spendings = columnsOf("spendings")
         assertThat(spendings.keys).containsExactlyInAnyOrder(
             "id",
@@ -201,7 +212,13 @@ class SchemaValidationIT : AbstractIntegrationTest() {
         assertThat(constraintsOf("accounts"))
             .contains("pk_accounts", "uq_accounts_id_user", "fk_accounts_user", "ck_accounts_name")
         assertThat(constraintsOf("categories"))
-            .contains("pk_categories", "uq_categories_id_user", "fk_categories_user", "ck_categories_name")
+            .contains(
+                "pk_categories",
+                "uq_categories_id_user",
+                "fk_categories_user",
+                "ck_categories_name",
+                "ck_categories_color",
+            )
         assertThat(constraintsOf("spendings")).contains(
             "pk_spendings",
             "fk_spendings_user",

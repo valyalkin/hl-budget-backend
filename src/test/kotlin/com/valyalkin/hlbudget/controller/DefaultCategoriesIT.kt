@@ -56,8 +56,40 @@ class DefaultCategoriesIT : AbstractIntegrationTest() {
             assertThat(item["isDefault"]).isEqualTo(true)
             assertThat(item["spendingCount"]).isEqualTo(0)
             assertThat(UUID.fromString(item["id"] as String)).isNotNull()
-            assertThat(item.keys).containsExactlyInAnyOrder("id", "name", "isDefault", "spendingCount")
+            assertThat(item.keys).containsExactlyInAnyOrder("id", "name", "isDefault", "spendingCount", "color")
         }
+    }
+
+    @Test
+    fun `each default has its fixed colour, the same for every user (feature 007)`() {
+        val expected =
+            listOf(
+                "#1e5b45",
+                "#c2410c",
+                "#1d4ed8",
+                "#a16207",
+                "#7e22ce",
+                "#0f766e",
+                "#be185d",
+                "#4d7c0f",
+                "#b91c1c",
+                "#0369a1",
+                "#57534e",
+                "#4338ca",
+                "#64748b",
+                "#16a34a",
+                "#c026d3",
+                "#7c2d12",
+                "#8a6d00",
+            )
+        val byName = defaults.zip(expected).toMap()
+
+        val aliceColors = categories(alice).associate { it["name"] to it["color"] }
+        val bobColors = categories(bob).associate { it["name"] to it["color"] }
+
+        assertThat(aliceColors).isEqualTo(byName)
+        assertThat(bobColors).isEqualTo(byName)
+        assertThat(aliceColors.values).doesNotHaveDuplicates()
     }
 
     @Test

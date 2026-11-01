@@ -25,7 +25,7 @@ class CurrentUserService(
     fun resolve(identity: VerifiedIdentity): UUID {
         val user = row(identity)
         if (user.categoriesSeededAt == null && users.claimSeeding(user.id)) {
-            users.insertDefaultCategories(user.id, DefaultCategories.NAMES)
+            users.insertDefaultCategories(user.id, DefaultCategories.ALL)
         }
         return user.id
     }

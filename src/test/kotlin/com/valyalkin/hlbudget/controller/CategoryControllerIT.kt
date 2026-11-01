@@ -15,8 +15,12 @@ class CategoryControllerIT : AbstractIntegrationTest() {
         groceries = categoryIds(alice).getValue("Groceries")
     }
 
-    private fun createCategory(name: String): String {
+    private fun createCategory(name: String): String = created(name).first
+
+    /** Creates a category and returns its id and colour. */
+    private fun created(name: String): Pair<String, String> {
         var id = ""
+        var color = ""
         sendJson(alice, "POST", base, """{"name":"$name"}""")
             .expectStatus()
             .isCreated()
@@ -29,7 +33,20 @@ class CategoryControllerIT : AbstractIntegrationTest() {
             .isEqualTo(0)
             .jsonPath("$.id")
             .value<String> { id = it }
-        return id
+            .jsonPath("$.color")
+            .value<String> { color = it }
+        return id to color
+    }
+
+    private fun colorOf(id: String): String {
+        var color = ""
+        getJson(alice, "$base/$id")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.color")
+            .value<String> { color = it }
+        return color
     }
 
     @Test
@@ -111,6 +128,45 @@ class CategoryControllerIT : AbstractIntegrationTest() {
         sendJson(bob, "PUT", "$base/$coffee", """{"name":"Mine"}""").expectStatus().isNotFound()
         delete(bob, "$base/$coffee").expectStatus().isNotFound()
         assertThat(categoryIds(alice)).containsKey("Coffee")
+    }
+
+    @Test
+    fun `new categories get the spare colours in order and keep them after a rename`() {
+        val (coffee, coffeeColor) = created("Coffee")
+        val (_, teaColor) = created("Tea")
+
+        assertThat(coffeeColor).isEqualTo("#e11d48")
+        assertThat(teaColor).isEqualTo("#0891b2")
+        sendJson(alice, "PUT", "$base/$coffee", """{"name":"Espresso"}""")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.color")
+            .isEqualTo("#e11d48")
+        assertThat(colorOf(coffee)).isEqualTo("#e11d48")
+    }
+
+    @Test
+    fun `a deleted category's colour goes to the next new one`() {
+        val (gifts, giftsColor) = created("Gifts")
+        created("Books")
+        delete(alice, "$base/$gifts").expectStatus().isNoContent()
+
+        assertThat(created("Music").second).isEqualTo(giftsColor)
+    }
+
+    @Test
+    fun `colours are assigned per user`() {
+        created("Coffee")
+        var bobColor = ""
+        sendJson(bob, "POST", base, """{"name":"Coffee"}""")
+            .expectStatus()
+            .isCreated()
+            .expectBody()
+            .jsonPath("$.color")
+            .value<String> { bobColor = it }
+
+        assertThat(bobColor).isEqualTo("#e11d48")
     }
 
     @Test

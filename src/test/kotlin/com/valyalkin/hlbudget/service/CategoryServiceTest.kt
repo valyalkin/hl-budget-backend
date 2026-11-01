@@ -4,11 +4,13 @@ import com.valyalkin.hlbudget.error.ConflictException
 import com.valyalkin.hlbudget.error.DuplicateException
 import com.valyalkin.hlbudget.error.NotFoundException
 import com.valyalkin.hlbudget.error.UnprocessableEntityException
+import com.valyalkin.hlbudget.model.DefaultCategories
 import com.valyalkin.hlbudget.model.NameCommand
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.category.CategoryEntity
 import com.valyalkin.hlbudget.repository.category.CategoryRepository
 import com.valyalkin.hlbudget.repository.category.CategoryRow
+import com.valyalkin.hlbudget.repository.category.ColorCount
 import com.valyalkin.hlbudget.repository.spending.SpendingRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -37,7 +39,7 @@ class CategoryServiceTest {
     private fun entity(
         name: String = "Coffee",
         isDefault: Boolean = false,
-    ) = CategoryEntity(id, userId, name, isDefault, now.minusSeconds(60), now.minusSeconds(60), 0)
+    ) = CategoryEntity(id, userId, name, isDefault, "#e11d48", now.minusSeconds(60), now.minusSeconds(60), 0)
 
     @BeforeEach
     fun caller() {
@@ -47,6 +49,7 @@ class CategoryServiceTest {
     @Test
     fun `create makes a custom category`() {
         every { categories.existsByUserIdAndNameIgnoreCase(userId, "Coffee") } returns false
+        every { categories.colorCounts(userId) } returns colorCounts(DefaultCategories.ALL.map { it.color })
         val saved = slot<CategoryEntity>()
         every { categories.saveAndFlush(capture(saved)) } answers { saved.captured }
 
@@ -54,8 +57,28 @@ class CategoryServiceTest {
 
         assertThat(category.isDefault).isFalse()
         assertThat(category.spendingCount).isZero()
+        assertThat(category.color).isEqualTo("#e11d48")
         assertThat(saved.captured.userId).isEqualTo(userId)
+        assertThat(saved.captured.color).isEqualTo("#e11d48")
     }
+
+    @Test
+    fun `create gives the least-used colour (feature 007, research R-004)`() {
+        every { categories.existsByUserIdAndNameIgnoreCase(userId, "Tea") } returns false
+        every { categories.colorCounts(userId) } returns
+            colorCounts(DefaultCategories.ALL.map { it.color } + listOf("#e11d48", "#0891b2"))
+        every { categories.saveAndFlush(any()) } answers { firstArg() }
+
+        assertThat(service.create(identity, NameCommand("Tea")).color).isEqualTo("#a855f7")
+    }
+
+    private fun colorCounts(colors: List<String>): List<ColorCount> =
+        colors.groupingBy { it }.eachCount().map { (color, count) ->
+            object : ColorCount {
+                override val color = color
+                override val count = count.toLong()
+            }
+        }
 
     @Test
     fun `a default's name counts as taken`() {
@@ -69,6 +92,7 @@ class CategoryServiceTest {
     @Test
     fun `a lost uniqueness race on create or rename is a duplicate`() {
         every { categories.existsByUserIdAndNameIgnoreCase(userId, "Coffee") } returns false
+        every { categories.colorCounts(userId) } returns emptyList()
         every { categories.saveAndFlush(any()) } throws DataIntegrityViolationException("ux")
 
         assertThatThrownBy { service.create(identity, NameCommand("Coffee")) }
@@ -99,7 +123,9 @@ class CategoryServiceTest {
         every { categories.findByIdAndUserId(id, userId) } returns existing
         every { categories.existsByUserIdAndNameIgnoreCaseAndIdNot(userId, "Cafés", id) } returns false
         every { categories.saveAndFlush(existing) } returns existing
-        every { categories.findWithCount(userId, id) } answers { CategoryRow(id, existing.name, false, 4) }
+        every { categories.findWithCount(userId, id) } answers {
+            CategoryRow(id, existing.name, false, 4, existing.color)
+        }
 
         val renamed = service.rename(identity, id, NameCommand("Cafés"))
 

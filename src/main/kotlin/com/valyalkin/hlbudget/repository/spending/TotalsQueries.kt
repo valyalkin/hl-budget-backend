@@ -17,6 +17,7 @@ data class MonthTotalRow(
 data class CategoryTotalRow(
     val categoryId: UUID,
     val categoryName: String,
+    val categoryColor: String,
     val total: BigDecimal,
     val spendingCount: Long,
 )
@@ -55,11 +56,11 @@ class TotalsQueries(
         jdbc
             .sql(
                 """
-                SELECT c.id, c.name, sum(s.amount) AS total, count(*) AS n
+                SELECT c.id, c.name, c.color, sum(s.amount) AS total, count(*) AS n
                 FROM spendings s
                 JOIN categories c ON c.id = s.category_id AND c.user_id = s.user_id
                 WHERE s.user_id = :userId AND s.spending_date BETWEEN :from AND :to
-                GROUP BY c.id, c.name
+                GROUP BY c.id, c.name, c.color
                 ORDER BY total DESC, lower(c.name), c.id
                 """.trimIndent(),
             ).param("userId", userId)
@@ -69,6 +70,7 @@ class TotalsQueries(
                 CategoryTotalRow(
                     rs.getObject("id", UUID::class.java),
                     rs.getString("name"),
+                    rs.getString("color"),
                     rs.getBigDecimal("total"),
                     rs.getLong("n"),
                 )

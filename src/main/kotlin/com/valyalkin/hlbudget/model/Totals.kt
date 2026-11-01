@@ -22,6 +22,8 @@ data class CategoryTotal(
     val category: Ref,
     val total: Money,
     val spendingCount: Long,
+    /** The category's colour, `#rrggbb` (feature 007). */
+    val color: String,
 )
 
 /** Spending per category over [from]..[to], largest first, with the range's own total. */
