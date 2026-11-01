@@ -68,7 +68,7 @@ class SpendingImportServiceTest {
 
     private fun category(name: String) = CategoryEntity(idOf(name), userId, name, true, "#c2410c", now, now, 0)
 
-    private fun account(name: String) = AccountEntity(idOf(name), userId, name, now, now, 0)
+    private fun account(name: String) = AccountEntity(idOf(name), userId, name, now, now, "#e11d48", 0)
 
     private fun stored(
         key: String,

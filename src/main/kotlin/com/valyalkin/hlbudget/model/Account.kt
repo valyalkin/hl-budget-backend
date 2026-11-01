@@ -7,4 +7,6 @@ data class Account(
     val id: UUID,
     val name: String,
     val spendingCount: Long,
+    /** `#rrggbb`, assigned on create and kept for the account's lifetime (feature 008). */
+    val color: String,
 )

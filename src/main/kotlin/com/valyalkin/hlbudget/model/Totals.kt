@@ -35,6 +35,24 @@ data class CategoryTotals(
     val items: List<CategoryTotal>,
 )
 
+/** One account's spending over a date range. Only accounts with spending appear (feature 008). */
+data class AccountTotal(
+    val account: Ref,
+    val total: Money,
+    val spendingCount: Long,
+    /** The account's colour, `#rrggbb`. */
+    val color: String,
+)
+
+/** Spending per account over [from]..[to], largest first, with the range's own total. */
+data class AccountTotals(
+    val from: LocalDate,
+    val to: LocalDate,
+    val total: Money,
+    val spendingCount: Long,
+    val items: List<AccountTotal>,
+)
+
 /**
  * A merchant derived from the caller's spendings: spendings whose merchant is equal ignoring case
  * and surrounding spaces. [name], [lastCategory] and [lastAccount] come from its most recent

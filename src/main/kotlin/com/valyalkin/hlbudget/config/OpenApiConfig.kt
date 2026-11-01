@@ -86,6 +86,8 @@ class OpenApiConfig {
                 "MonthlyTotals",
                 "CategoryTotal",
                 "CategoryTotals",
+                "AccountTotal",
+                "AccountTotals",
                 "Merchant",
                 "MerchantList",
             )

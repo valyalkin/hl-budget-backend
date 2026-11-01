@@ -4,6 +4,7 @@ import com.valyalkin.hlbudget.dto.MoneyTotalDto
 import com.valyalkin.hlbudget.dto.RefDto
 import com.valyalkin.hlbudget.dto.toDto
 import com.valyalkin.hlbudget.dto.toTotalDto
+import com.valyalkin.hlbudget.model.AccountTotals
 import com.valyalkin.hlbudget.model.CategoryTotals
 import com.valyalkin.hlbudget.model.MonthlyTotals
 import io.swagger.v3.oas.annotations.media.ArraySchema
@@ -58,6 +59,35 @@ data class CategoryTotalsResponse(
     val items: List<CategoryTotalResponse>,
 )
 
+@Schema(name = "AccountTotal", description = "One account's spending in the range")
+data class AccountTotalResponse(
+    val account: RefDto,
+    val total: MoneyTotalDto,
+    @field:Schema(example = "2", minimum = "1")
+    val spendingCount: Long,
+    @field:Schema(
+        description = "The account's colour, the same as Account.color",
+        example = "#e11d48",
+        pattern = "^#[0-9a-f]{6}$",
+    )
+    val color: String,
+)
+
+@Schema(
+    name = "AccountTotals",
+    description = "Spending per account over a date range: only accounts with spending, largest first",
+)
+data class AccountTotalsResponse(
+    @field:Schema(example = "2026-10-01")
+    val from: LocalDate,
+    @field:Schema(example = "2026-10-31")
+    val to: LocalDate,
+    val total: MoneyTotalDto,
+    @field:Schema(example = "14", minimum = "0")
+    val spendingCount: Long,
+    val items: List<AccountTotalResponse>,
+)
+
 fun MonthlyTotals.toResponse(): MonthlyTotalsResponse =
     MonthlyTotalsResponse(
         year = year,
@@ -74,5 +104,17 @@ fun CategoryTotals.toResponse(): CategoryTotalsResponse =
         items =
             items.map {
                 CategoryTotalResponse(it.category.toDto(), it.total.toTotalDto(), it.spendingCount, it.color)
+            },
+    )
+
+fun AccountTotals.toResponse(): AccountTotalsResponse =
+    AccountTotalsResponse(
+        from = from,
+        to = to,
+        total = total.toTotalDto(),
+        spendingCount = spendingCount,
+        items =
+            items.map {
+                AccountTotalResponse(it.account.toDto(), it.total.toTotalDto(), it.spendingCount, it.color)
             },
     )

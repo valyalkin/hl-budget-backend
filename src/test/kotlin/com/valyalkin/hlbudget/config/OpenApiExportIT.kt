@@ -72,7 +72,7 @@ class OpenApiExportIT : AbstractIntegrationTest() {
             .exists()
             // Only the contract's paths: no framework endpoints, no Spring ProblemDetail schema.
             .jsonPath("$.paths.length()")
-            .isEqualTo(14)
+            .isEqualTo(15)
             .jsonPath("$.paths['/api/v1/spending-imports'].post.responses.201")
             .exists()
             .jsonPath("$.paths['/api/v1/spending-imports'].post.responses.422")
@@ -110,6 +110,7 @@ class OpenApiExportIT : AbstractIntegrationTest() {
                 ("deleteSpending" to listOf(204, 400, 401, 404, 500, 503)),
             "get /api/v1/monthly-totals" to ("listMonthlyTotals" to listOf(200, 401, 422, 500, 503)),
             "get /api/v1/category-totals" to ("listCategoryTotals" to listOf(200, 401, 422, 500, 503)),
+            "get /api/v1/account-totals" to ("listAccountTotals" to listOf(200, 401, 422, 500, 503)),
             "get /api/v1/merchants" to ("listMerchants" to listOf(200, 401, 422, 500, 503)),
         )
 
@@ -165,7 +166,17 @@ class OpenApiExportIT : AbstractIntegrationTest() {
             .isEqualTo("^#[0-9a-f]{6}$")
             .jsonPath("$.components.schemas.CategoryTotal.required")
             .value<List<String>> { assertThat(it).contains("color") }
-            .jsonPath("$.components.responses.InUse.content['application/problem+json'].examples.inUse")
+            .jsonPath("$.components.schemas.Account.required")
+            .value<List<String>> { assertThat(it).containsExactlyInAnyOrder("id", "name", "spendingCount", "color") }
+            .jsonPath("$.components.schemas.Account.properties.color.pattern")
+            .isEqualTo("^#[0-9a-f]{6}$")
+            .jsonPath("$.components.schemas.AccountTotal.required")
+            .value<List<String>> {
+                assertThat(it).containsExactlyInAnyOrder("account", "total", "spendingCount", "color")
+            }.jsonPath("$.components.schemas.AccountTotals.required")
+            .value<List<String>> {
+                assertThat(it).containsExactlyInAnyOrder("from", "to", "total", "spendingCount", "items")
+            }.jsonPath("$.components.responses.InUse.content['application/problem+json'].examples.inUse")
             .exists()
             .jsonPath("$.components.responses.SpendingValidationFailed.content['application/problem+json'].examples")
             .exists()

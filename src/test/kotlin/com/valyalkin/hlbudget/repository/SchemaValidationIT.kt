@@ -13,13 +13,13 @@ import java.util.UUID
  */
 class SchemaValidationIT : AbstractIntegrationTest() {
     @Test
-    fun `V1 to V5 applied cleanly`() {
+    fun `V1 to V6 applied cleanly`() {
         val applied =
             jdbcTemplate.queryForList(
                 "SELECT version, success FROM flyway_schema_history ORDER BY installed_rank",
             )
 
-        assertThat(applied.map { it["version"] }).containsExactly("1", "2", "3", "4", "5")
+        assertThat(applied.map { it["version"] }).containsExactly("1", "2", "3", "4", "5", "6")
         assertThat(applied).allSatisfy({ assertThat(it["success"]).isEqualTo(true) })
     }
 
@@ -169,7 +169,7 @@ class SchemaValidationIT : AbstractIntegrationTest() {
     @Test
     fun `accounts categories and spendings have the data-model columns`() {
         assertThat(columnsOf("accounts").keys)
-            .containsExactlyInAnyOrder("id", "user_id", "name", "created_at", "updated_at", "version")
+            .containsExactlyInAnyOrder("id", "user_id", "name", "created_at", "updated_at", "version", "color")
         assertThat(columnsOf("categories").keys)
             .containsExactlyInAnyOrder(
                 "id",

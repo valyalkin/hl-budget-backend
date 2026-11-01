@@ -22,6 +22,15 @@ data class CategoryTotalRow(
     val spendingCount: Long,
 )
 
+/** An account with at least one spending in the range (feature 008). */
+data class AccountTotalRow(
+    val accountId: UUID,
+    val accountName: String,
+    val accountColor: String,
+    val total: BigDecimal,
+    val spendingCount: Long,
+)
+
 /** Sums over the caller's spendings, computed in Postgres on exact `numeric` (feature 003, R-002). */
 @Repository
 class TotalsQueries(
@@ -68,6 +77,35 @@ class TotalsQueries(
             .param("to", to)
             .query { rs, _ ->
                 CategoryTotalRow(
+                    rs.getObject("id", UUID::class.java),
+                    rs.getString("name"),
+                    rs.getString("color"),
+                    rs.getBigDecimal("total"),
+                    rs.getLong("n"),
+                )
+            }.list()
+
+    /** One row per account with spendings in [from]..[to], largest total first, ties by name (feature 008). */
+    fun byAccount(
+        userId: UUID,
+        from: LocalDate,
+        to: LocalDate,
+    ): List<AccountTotalRow> =
+        jdbc
+            .sql(
+                """
+                SELECT a.id, a.name, a.color, sum(s.amount) AS total, count(*) AS n
+                FROM spendings s
+                JOIN accounts a ON a.id = s.account_id AND a.user_id = s.user_id
+                WHERE s.user_id = :userId AND s.spending_date BETWEEN :from AND :to
+                GROUP BY a.id, a.name, a.color
+                ORDER BY total DESC, lower(a.name), a.id
+                """.trimIndent(),
+            ).param("userId", userId)
+            .param("from", from)
+            .param("to", to)
+            .query { rs, _ ->
+                AccountTotalRow(
                     rs.getObject("id", UUID::class.java),
                     rs.getString("name"),
                     rs.getString("color"),

@@ -6,7 +6,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-/** Feature 003, research R-002: GET /monthly-totals and GET /category-totals. */
+/** Feature 003, research R-002: GET /monthly-totals and GET /category-totals; feature 008: GET /account-totals. */
 class TotalsIT : AbstractIntegrationTest() {
     private lateinit var categories: Map<String, String>
     private lateinit var amex: String
@@ -189,6 +189,146 @@ class TotalsIT : AbstractIntegrationTest() {
         client
             .get()
             .uri("/api/v1/category-totals?from=2026-10-01&to=2026-10-31")
+            .exchange()
+            .expectStatus()
+            .isUnauthorized()
+    }
+
+    private fun accountColor(id: String): String {
+        var color = ""
+        getJson(alice, "/api/v1/accounts/$id")
+            .expectBody()
+            .jsonPath("$.color")
+            .value<String> { color = it }
+        return color
+    }
+
+    @Test
+    fun `account totals list only accounts with spending, largest first, adding up (feature 008)`() {
+        val debit = createAccount(alice, "Debit card")
+        val unused = createAccount(alice, "Cash")
+        spend("Groceries", "50.00", "2026-10-01")
+        spend("Groceries", "126.44", "2026-10-15")
+        createSpending(alice, categories.getValue("Rent"), debit, amount = "2150.00", date = "2026-10-01")
+        spend("Taxi", "20.00", "2026-09-30")
+
+        var names = emptyList<String>()
+        var colors = emptyList<String>()
+        getJson(alice, "/api/v1/account-totals?from=2026-10-01&to=2026-10-31")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.items[*].account.name")
+            .value<List<String>> { names = it }
+            .jsonPath("$.items[*].color")
+            .value<List<String>> { colors = it }
+            .jsonPath("$.items[0].total.amount")
+            .isEqualTo("2150.00")
+            .jsonPath("$.items[0].spendingCount")
+            .isEqualTo(1)
+            .jsonPath("$.items[1].total.amount")
+            .isEqualTo("176.44")
+            .jsonPath("$.items[1].total.currency")
+            .isEqualTo("CAD")
+            .jsonPath("$.items[1].spendingCount")
+            .isEqualTo(2)
+            .jsonPath("$.items[0].account.id")
+            .isEqualTo(debit)
+            .jsonPath("$.total.amount")
+            .isEqualTo("2326.44")
+            .jsonPath("$.spendingCount")
+            .isEqualTo(3)
+            .jsonPath("$.from")
+            .isEqualTo("2026-10-01")
+            .jsonPath("$.to")
+            .isEqualTo("2026-10-31")
+
+        assertThat(names).containsExactly("Debit card", "Amex")
+        assertThat(colors).containsExactly(accountColor(debit), accountColor(amex))
+        assertThat(names).doesNotContain("Cash")
+        assertThat(unused).isNotBlank()
+        // The same range adds up to the same total as the category and monthly views (FR-007).
+        getJson(alice, "/api/v1/category-totals?from=2026-10-01&to=2026-10-31")
+            .expectBody()
+            .jsonPath("$.total.amount")
+            .isEqualTo("2326.44")
+        getJson(alice, "/api/v1/monthly-totals?year=2026")
+            .expectBody()
+            .jsonPath("$.months[9].total.amount")
+            .isEqualTo("2326.44")
+    }
+
+    @Test
+    fun `account totals with equal amounts are ordered by name ignoring case (feature 008)`() {
+        val cash = createAccount(alice, "cash")
+        val bonds = createAccount(alice, "Bonds")
+        createSpending(alice, categories.getValue("Rent"), cash, amount = "10.00", date = "2026-10-01")
+        createSpending(alice, categories.getValue("Rent"), bonds, amount = "10.00", date = "2026-10-01")
+        spend("Rent", "10.00", "2026-10-01")
+
+        var names = emptyList<String>()
+        getJson(alice, "/api/v1/account-totals?from=2026-10-01&to=2026-10-31")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.items[*].account.name")
+            .value<List<String>> { names = it }
+
+        assertThat(names).containsExactly("Amex", "Bonds", "cash")
+    }
+
+    @Test
+    fun `account totals for a range with nothing spent are empty and zero (feature 008)`() {
+        getJson(alice, "/api/v1/account-totals?from=2026-02-01&to=2026-02-28")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.items")
+            .isEmpty()
+            .jsonPath("$.total.amount")
+            .isEqualTo("0.00")
+            .jsonPath("$.spendingCount")
+            .isEqualTo(0)
+    }
+
+    @Test
+    fun `account totals refuse a bad range naming the parameter (feature 008)`() {
+        fun expectField(
+            query: String,
+            field: String,
+            pointer: String,
+        ) = getJson(alice, "/api/v1/account-totals?$query")
+            .expectStatus()
+            .isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo(field)
+            .jsonPath("$.errors[0].pointer")
+            .isEqualTo(pointer)
+
+        expectField("from=2026-11-01&to=2026-10-01", "from", "#/from")
+        expectField("from=2025-01-01&to=2026-01-03", "to", "#/to")
+        getJson(alice, "/api/v1/account-totals?to=2026-10-31")
+            .expectStatus()
+            .isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("from")
+    }
+
+    @Test
+    fun `account totals never count another user's spendings, and no token is 401 (feature 008)`() {
+        spend("Groceries", "84.37", "2026-10-01")
+
+        getJson(bob, "/api/v1/account-totals?from=2026-10-01&to=2026-10-31")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.items")
+            .isEmpty()
+        client
+            .get()
+            .uri("/api/v1/account-totals?from=2026-10-01&to=2026-10-31")
             .exchange()
             .expectStatus()
             .isUnauthorized()

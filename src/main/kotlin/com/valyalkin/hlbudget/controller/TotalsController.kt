@@ -2,6 +2,7 @@ package com.valyalkin.hlbudget.controller
 
 import com.valyalkin.hlbudget.config.OpenApiBudgetComponents
 import com.valyalkin.hlbudget.config.OpenApiConfig
+import com.valyalkin.hlbudget.dto.totals.AccountTotalsResponse
 import com.valyalkin.hlbudget.dto.totals.CategoryTotalsResponse
 import com.valyalkin.hlbudget.dto.totals.MonthlyTotalsResponse
 import com.valyalkin.hlbudget.dto.totals.toResponse
@@ -23,7 +24,10 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
-/** Sums of the caller's spendings by month and by category (feature 003, research R-002). */
+/**
+ * Sums of the caller's spendings by month, by category (feature 003, research R-002) and by account
+ * (feature 008, research R-004).
+ */
 @RestController
 @Tag(name = OpenApiConfig.TAG_TOTALS)
 class TotalsController(
@@ -100,6 +104,44 @@ class TotalsController(
         to: LocalDate,
     ): CategoryTotalsResponse = totals.byCategory(identity, from, to).toResponse()
 
+    @GetMapping("/api/v1/account-totals", produces = [MediaType.APPLICATION_JSON_VALUE])
+    @Operation(
+        operationId = "listAccountTotals",
+        summary = "The caller's spending per account over a date range",
+        description =
+            "One entry per account with at least one spending in the range, and only those; largest total " +
+                "first, ties by account name. Not paged: bounded by the caller's account count.",
+    )
+    @ApiResponse(
+        responseCode = "200",
+        description = "Totals per account; `items` is empty when nothing was spent",
+        content = [
+            Content(
+                mediaType = JSON,
+                schema = Schema(implementation = AccountTotalsResponse::class),
+                examples = [ExampleObject(name = "october", value = ACCOUNT_EXAMPLE)],
+            ),
+        ],
+    )
+    @ApiResponse(responseCode = "401", ref = UNAUTHENTICATED)
+    @ApiResponse(responseCode = "422", ref = OpenApiBudgetComponents.VALIDATION_FAILED)
+    @ApiResponse(responseCode = "500", ref = INTERNAL)
+    @ApiResponse(responseCode = "503", ref = UNAVAILABLE)
+    fun listAccountTotals(
+        @Parameter(hidden = true) identity: VerifiedIdentity,
+        @Parameter(description = "Earliest date, inclusive", example = "2026-10-01")
+        @RequestParam
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        from: LocalDate,
+        @Parameter(
+            description = "Latest date, inclusive; not before `from`, at most 366 days after it",
+            example = "2026-10-31",
+        )
+        @RequestParam
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+        to: LocalDate,
+    ): AccountTotalsResponse = totals.byAccount(identity, from, to).toResponse()
+
     private companion object {
         const val MIN_YEAR = 2000L
         const val MAX_YEAR = 2100L
@@ -116,8 +158,15 @@ class TotalsController(
             """{"from":"2026-10-01","to":"2026-10-31","total":{"amount":"2326.44","currency":"CAD"},""" +
                 """"spendingCount":3,"items":[""" +
                 """{"category":{"id":"5b1e2c3d-4f5a-4b6c-8d7e-9f0a1b2c3d44","name":"Rent"},""" +
-                """"total":{"amount":"2150.00","currency":"CAD"},"spendingCount":1},""" +
+                """"total":{"amount":"2150.00","currency":"CAD"},"spendingCount":1,"color":"#1e5b45"},""" +
                 """{"category":{"id":"2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55","name":"Groceries"},""" +
-                """"total":{"amount":"176.44","currency":"CAD"},"spendingCount":2}]}"""
+                """"total":{"amount":"176.44","currency":"CAD"},"spendingCount":2,"color":"#c2410c"}]}"""
+        const val ACCOUNT_EXAMPLE =
+            """{"from":"2026-10-01","to":"2026-10-31","total":{"amount":"2326.44","currency":"CAD"},""" +
+                """"spendingCount":3,"items":[""" +
+                """{"account":{"id":"3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11","name":"Debit card"},""" +
+                """"total":{"amount":"2150.00","currency":"CAD"},"spendingCount":1,"color":"#e11d48"},""" +
+                """{"account":{"id":"7a2d9e41-5c3b-4f8a-b1e6-2d4c8f0a9b33","name":"Amex"},""" +
+                """"total":{"amount":"176.44","currency":"CAD"},"spendingCount":2,"color":"#0891b2"}]}"""
     }
 }

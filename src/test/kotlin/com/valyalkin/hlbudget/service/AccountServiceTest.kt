@@ -9,6 +9,7 @@ import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.account.AccountRow
+import com.valyalkin.hlbudget.repository.category.ColorCount
 import com.valyalkin.hlbudget.repository.spending.SpendingRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -41,6 +42,7 @@ class AccountServiceTest {
             name = name,
             createdAt = now.minusSeconds(60),
             updatedAt = now.minusSeconds(60),
+            color = "#e11d48",
             version = 0,
         )
 
@@ -55,12 +57,44 @@ class AccountServiceTest {
         val saved = slot<AccountEntity>()
         every { accounts.saveAndFlush(capture(saved)) } answers { saved.captured }
 
+        every { accounts.colorCounts(userId) } returns emptyList()
+
         val account = service.create(identity, NameCommand("Amex"))
 
         assertThat(account.name).isEqualTo("Amex")
         assertThat(account.spendingCount).isZero()
         assertThat(saved.captured.userId).isEqualTo(userId)
         assertThat(saved.captured.createdAt).isEqualTo(now)
+        // A user's first account gets the first spare colour (feature 008, research R-002).
+        assertThat(saved.captured.color).isEqualTo("#e11d48")
+        assertThat(account.color).isEqualTo("#e11d48")
+    }
+
+    @Test
+    fun `create gives a new account the least-used colour among the caller's accounts`() {
+        every { accounts.existsByUserIdAndNameIgnoreCase(userId, "Cash") } returns false
+        val saved = slot<AccountEntity>()
+        every { accounts.saveAndFlush(capture(saved)) } answers { saved.captured }
+        every { accounts.colorCounts(userId) } returns colorCounts("#e11d48", "#a855f7")
+
+        val account = service.create(identity, NameCommand("Cash"))
+
+        assertThat(account.color).isEqualTo("#0891b2")
+    }
+
+    @Test
+    fun `rename keeps the account's colour`() {
+        val existing = entity()
+        every { accounts.findByIdAndUserId(accountId, userId) } returns existing
+        every { accounts.existsByUserIdAndNameIgnoreCaseAndIdNot(userId, "Amex Gold", accountId) } returns false
+        every { accounts.saveAndFlush(existing) } returns existing
+        every { accounts.findWithCount(userId, accountId) } answers
+            { AccountRow(accountId, existing.name, 0, existing.color) }
+
+        val renamed = service.rename(identity, accountId, NameCommand("Amex Gold"))
+
+        assertThat(renamed.color).isEqualTo("#e11d48")
+        assertThat(existing.color).isEqualTo("#e11d48")
     }
 
     @Test
@@ -87,7 +121,8 @@ class AccountServiceTest {
         every { accounts.findByIdAndUserId(accountId, userId) } returns existing
         every { accounts.existsByUserIdAndNameIgnoreCaseAndIdNot(userId, "AMEX", accountId) } returns false
         every { accounts.saveAndFlush(existing) } returns existing
-        every { accounts.findWithCount(userId, accountId) } answers { AccountRow(accountId, existing.name, 3) }
+        every { accounts.findWithCount(userId, accountId) } answers
+            { AccountRow(accountId, existing.name, 3, existing.color) }
 
         val renamed = service.rename(identity, accountId, NameCommand("AMEX"))
 
@@ -155,7 +190,7 @@ class AccountServiceTest {
 
     @Test
     fun `list maps every row`() {
-        every { accounts.findAllWithCounts(userId) } returns listOf(AccountRow(accountId, "Amex", 1))
+        every { accounts.findAllWithCounts(userId) } returns listOf(AccountRow(accountId, "Amex", 1, "#e11d48"))
 
         assertThat(service.list(identity)).singleElement().satisfies({ assertThat(it.spendingCount).isEqualTo(1) })
     }
@@ -177,5 +212,13 @@ class AccountServiceTest {
             .hasFieldOrPropertyWithValue("details", mapOf("reason" to "in-use", "spendingCount" to 3L))
     }
 
-    private fun other() = AccountEntity(UUID.randomUUID(), userId, "Cash", now, now, 0)
+    private fun colorCounts(vararg colors: String): List<ColorCount> =
+        colors.map {
+            object : ColorCount {
+                override val color = it
+                override val count = 1L
+            }
+        }
+
+    private fun other() = AccountEntity(UUID.randomUUID(), userId, "Cash", now, now, "#0891b2", 0)
 }

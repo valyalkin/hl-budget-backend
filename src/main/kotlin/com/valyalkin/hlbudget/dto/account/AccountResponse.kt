@@ -15,6 +15,15 @@ data class AccountResponse(
         minimum = "0",
     )
     val spendingCount: Long,
+    @field:Schema(
+        description =
+            "The account's colour, assigned when it is created and kept for its lifetime (including renames). " +
+                "Drawn in the By account table and donut",
+        example = "#e11d48",
+        pattern = "^#[0-9a-f]{6}$",
+        accessMode = Schema.AccessMode.READ_ONLY,
+    )
+    val color: String,
 )
 
 @Schema(name = "AccountList", description = "All of the caller's accounts, sorted by name (never paged)")
