@@ -68,7 +68,7 @@ class TotalsService(
         val userId = currentUser.resolve(identity)
         val items =
             queries.byCategory(userId, from, to).map {
-                CategoryTotal(Ref(it.categoryId, it.categoryName), money(it.total), it.spendingCount)
+                CategoryTotal(Ref(it.categoryId, it.categoryName), money(it.total), it.spendingCount, it.categoryColor)
             }
         return CategoryTotals(
             from = from,

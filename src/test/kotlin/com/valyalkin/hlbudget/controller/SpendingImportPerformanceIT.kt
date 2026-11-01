@@ -17,8 +17,8 @@ class SpendingImportPerformanceIT : AbstractIntegrationTest() {
         val start = LocalDate.parse("2026-07-01")
         val rows =
             (0 until 1000).joinToString(",") { i ->
-                // 20 category names (10 defaults, 10 new) and 3 account names, in varying case.
-                val category = if (i % 20 < 10) DEFAULTS[i % 10] else "Import Category ${i % 20}"
+                // 20 category names (10 defaults, 10 custom) and 3 account names, in varying case.
+                val category = if (i % 20 < 10) DEFAULTS[i % 10] else "import category ${i % 20}"
                 val account = listOf("Visa", "AMEX", "cash")[i % 3]
                 """{"date":"${start.plusDays((i % 118).toLong())}","merchant":"Run $run Shop ${i % 50}",""" +
                     """"amount":{"amount":"${1 + i % 300}.${10 + i % 90}","currency":"CAD"},""" +
@@ -43,8 +43,14 @@ class SpendingImportPerformanceIT : AbstractIntegrationTest() {
     }
 
     @Test
-    fun `1,000 rows import in under 2 seconds, with each new name created once`() {
+    fun `1,000 rows import in under 2 seconds, matching existing names in any case`() {
         categoryIds(alice)
+        (10 until 20).forEach {
+            sendJson(alice, "POST", "/api/v1/categories", """{"name":"Import Category $it"}""")
+                .expectStatus()
+                .isCreated()
+        }
+        listOf("Visa", "Amex", "Cash").forEach { createAccount(alice, it) }
         timedImport(0)
 
         val runs = (1..3).map { timedImport(it) }.sorted()

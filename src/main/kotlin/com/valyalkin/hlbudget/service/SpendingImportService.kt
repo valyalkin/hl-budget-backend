@@ -37,9 +37,10 @@ class SpendingImportService(
     private val clock: Clock,
 ) {
     /**
-     * Creates every row as a spending in one transaction, creating each missing category and
-     * account name once. Nothing is written unless every row is valid (FR-033). With an
-     * [idempotencyKey], a repeat with the same rows returns the first import (FR-034).
+     * Creates every row as a spending in one transaction. Every row's category and account name
+     * must match one of the caller's items; nothing is created (feature 007, FR-026). Nothing is
+     * written unless every row is valid (FR-033). With an [idempotencyKey], a repeat with the same
+     * rows returns the first import (FR-034), even if a name has been removed since.
      */
     @Transactional
     fun create(
@@ -61,6 +62,8 @@ class SpendingImportService(
             imports.findByUserIdAndIdempotencyKey(userId, idempotencyKey)?.let { return replay(it, fingerprint) }
         }
 
+        val refs = knownNames(userId, rows)
+
         val now = Instant.now(clock)
         val receipt =
             SpendingImportEntity(
@@ -81,7 +84,6 @@ class SpendingImportService(
             return replay(winner, fingerprint ?: "")
         }
 
-        val refs = names.resolveNames(userId, rows.map { it.categoryName }, rows.map { it.accountName }, now)
         spendingInserts.batchInsert(
             rows.map { row ->
                 SpendingEntity(
@@ -97,6 +99,17 @@ class SpendingImportService(
             },
         )
         return CreateImportResult(receipt.toModel(rules.currency), replayed = false)
+    }
+
+    /** The caller's items by name, or a refusal naming every row whose name matches none (FR-025). */
+    private fun knownNames(
+        userId: UUID,
+        rows: List<ImportRowCommand>,
+    ): NamedItemResolver.NameMaps {
+        val refs = names.names(userId)
+        val unknown = rows.flatMapIndexed { index, row -> refs.violations(row, index) }
+        if (unknown.isNotEmpty()) throw ValidationException(unknown)
+        return refs
     }
 
     /** One of the caller's imports; anyone else's is not found, like an unknown id. */

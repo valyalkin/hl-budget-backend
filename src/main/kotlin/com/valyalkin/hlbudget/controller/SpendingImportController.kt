@@ -50,9 +50,10 @@ class SpendingImportController(
         description =
             "Creates every row as a spending in one step. If any row is invalid, nothing is created and every " +
                 "problem is listed, with a JSON Pointer naming the row (`#/spendings/3/date`).\n\n" +
-                "Categories and accounts are given by name. Each name is matched against the caller's items " +
-                "ignoring case and surrounding spaces, and created when none matches. A name that appears in " +
-                "several rows, in any letter case, creates one item.\n\n" +
+                "Categories and accounts are given by name. Each name must match one of the caller's items, " +
+                "ignoring case and surrounding spaces; a name that matches none is refused with NotFound at " +
+                "that row, and nothing is created. Categories and accounts are created only through their own " +
+                "endpoints.\n\n" +
                 "Send an `Idempotency-Key` to make retries safe: repeating an import with the same key and the " +
                 "same rows returns the first import with 200 and `Idempotent-Replayed: true` instead of " +
                 "creating the spendings again.",

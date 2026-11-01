@@ -171,11 +171,13 @@ internal object OpenApiBudgetComponents {
                 response(
                     "Invalid fields, each listed in `errors`. Codes include Required, TypeMismatch, NotBlank, Size, " +
                         "Pattern, Positive, UnsupportedCurrency, NotFuture, NotFound (an unknown or another " +
-                        "user's category or account) and ExactlyOne (give exactly one of categoryId and " +
+                        "user's category or account, by id or by name; a name never creates one) and " +
+                        "ExactlyOne (give exactly one of categoryId and " +
                         "categoryName, and of accountId and accountName). On create only, " +
                         "`details.reason = idempotency-key-reused` when the Idempotency-Key was already used " +
                         "for a different spending",
                     "invalid" to spendingInvalid,
+                    "unknownCategoryName" to unknownCategoryName,
                     "keyReused" to
                         problem(
                             UNPROCESSABLE,
@@ -193,7 +195,10 @@ internal object OpenApiBudgetComponents {
                     "Nothing was created. Every invalid field of every row is listed in `errors`, its pointer " +
                         "naming the row by its 0-based position (`#/spendings/3/amount/amount`). Codes are those of " +
                         "SpendingRequest (Required, TypeMismatch, NotBlank, Size, Pattern, Positive, " +
-                        "UnsupportedCurrency, NotFuture), plus Size on `#/spendings` for 0 or more than 1000 rows. " +
+                        "UnsupportedCurrency, NotFuture), NotFound on a category or account name that " +
+                        "matches none of the caller's items (an import never creates one), plus Size on " +
+                        "`#/spendings` for 0 or more " +
+                        "than 1000 rows. " +
                         "`details.reason = idempotency-key-reused` when the Idempotency-Key was already used for " +
                         "different rows",
                     "invalidRows" to
@@ -217,6 +222,7 @@ internal object OpenApiBudgetComponents {
                                     ),
                                 ),
                         ),
+                    "unknownNames" to unknownImportNames,
                     "tooMany" to
                         problem(
                             UNPROCESSABLE,
@@ -233,6 +239,42 @@ internal object OpenApiBudgetComponents {
                         ),
                 ),
         )
+
+    /** Feature 007: a name that matches none of the caller's items is refused, never created. */
+    private val unknownCategoryName
+        get() =
+            problem(
+                UNPROCESSABLE,
+                "1 field is invalid: categoryName",
+                "/api/v1/spendings",
+                errors =
+                    listOf(
+                        violation("#/categoryName", "categoryName", "NotFound", "is not one of your categories"),
+                    ),
+            )
+
+    private val unknownImportNames
+        get() =
+            problem(
+                UNPROCESSABLE,
+                "2 fields are invalid: spendings[2].categoryName, spendings[5].accountName",
+                IMPORTS_PATH,
+                errors =
+                    listOf(
+                        violation(
+                            "#/spendings/2/categoryName",
+                            "spendings[2].categoryName",
+                            "NotFound",
+                            "is not one of your categories",
+                        ),
+                        violation(
+                            "#/spendings/5/accountName",
+                            "spendings[5].accountName",
+                            "NotFound",
+                            "is not one of your accounts",
+                        ),
+                    ),
+            )
 
     private val spendingInvalid
         get() =

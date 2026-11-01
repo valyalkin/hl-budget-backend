@@ -35,6 +35,12 @@ data class CategoryTotalResponse(
     val total: MoneyTotalDto,
     @field:Schema(example = "2", minimum = "1")
     val spendingCount: Long,
+    @field:Schema(
+        description = "The category's colour, the same as Category.color",
+        example = "#c2410c",
+        pattern = "^#[0-9a-f]{6}$",
+    )
+    val color: String,
 )
 
 @Schema(
@@ -65,5 +71,8 @@ fun CategoryTotals.toResponse(): CategoryTotalsResponse =
         to = to,
         total = total.toTotalDto(),
         spendingCount = spendingCount,
-        items = items.map { CategoryTotalResponse(it.category.toDto(), it.total.toTotalDto(), it.spendingCount) },
+        items =
+            items.map {
+                CategoryTotalResponse(it.category.toDto(), it.total.toTotalDto(), it.spendingCount, it.color)
+            },
     )

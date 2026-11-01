@@ -36,6 +36,12 @@ interface AccountRepository : JpaRepository<AccountEntity, UUID> {
 
     fun findAllByUserId(userId: UUID): List<AccountEntity>
 
+    /** Feature 007, research R-008: a name given with a spending must match an existing item. */
+    fun findByUserIdAndNameIgnoreCase(
+        userId: UUID,
+        name: String,
+    ): AccountEntity?
+
     fun existsByUserIdAndNameIgnoreCase(
         userId: UUID,
         name: String,

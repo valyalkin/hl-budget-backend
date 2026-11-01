@@ -105,6 +105,35 @@ class TotalsIT : AbstractIntegrationTest() {
     }
 
     @Test
+    fun `each category total carries its category's colour (feature 007)`() {
+        spend("Groceries", "10.00", "2026-10-01")
+        spend("Rent", "2150.00", "2026-10-01")
+        var coffeeId = ""
+        sendJson(alice, "POST", "/api/v1/categories", """{"name":"Coffee"}""")
+            .expectStatus()
+            .isCreated()
+            .expectBody()
+            .jsonPath("$.id")
+            .value<String> { coffeeId = it }
+        createSpending(alice, coffeeId, amex, amount = "4.50", date = "2026-10-02")
+
+        getJson(alice, "/api/v1/category-totals?from=2026-10-01&to=2026-10-31")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.items[0].category.name")
+            .isEqualTo("Rent")
+            .jsonPath("$.items[0].color")
+            .isEqualTo("#1e5b45")
+            .jsonPath("$.items[1].color")
+            .isEqualTo("#c2410c")
+            .jsonPath("$.items[2].category.name")
+            .isEqualTo("Coffee")
+            .jsonPath("$.items[2].color")
+            .isEqualTo("#e11d48")
+    }
+
+    @Test
     fun `a range with nothing spent is empty and zero`() {
         getJson(alice, "/api/v1/category-totals?from=2026-02-01&to=2026-02-28")
             .expectStatus()

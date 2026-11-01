@@ -21,6 +21,9 @@ class CategoryEntity(
     var name: String,
     @Column(name = "is_default", nullable = false, updatable = false)
     var isDefault: Boolean = false,
+    // Fixed when the category is created (feature 007, research R-004); a rename keeps it.
+    @Column(name = "color", nullable = false, updatable = false, length = 7)
+    var color: String,
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: Instant,
     @Column(name = "updated_at", nullable = false)

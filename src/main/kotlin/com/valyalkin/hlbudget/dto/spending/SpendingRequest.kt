@@ -42,7 +42,7 @@ data class SpendingRequest(
     @field:Schema(
         description =
             "Instead of categoryId: matched against the caller's categories ignoring case and surrounding " +
-                "spaces, and created when none matches",
+                "spaces. Refused (422, NotFound) when none matches; never creates a category",
         example = "Coffee",
         maxLength = MAX_NAME,
     )
@@ -51,7 +51,7 @@ data class SpendingRequest(
     @field:Schema(
         description =
             "Instead of accountId: matched against the caller's accounts ignoring case and surrounding " +
-                "spaces, and created when none matches",
+                "spaces. Refused (422, NotFound) when none matches; never creates an account",
         example = "Visa",
         maxLength = MAX_NAME,
     )

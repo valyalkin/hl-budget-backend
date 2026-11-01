@@ -160,7 +160,11 @@ class OpenApiExportIT : AbstractIntegrationTest() {
             .jsonPath("$.components.schemas.Spending.required.length()")
             .isEqualTo(8)
             .jsonPath("$.components.schemas.Category.required.length()")
-            .isEqualTo(4)
+            .isEqualTo(5)
+            .jsonPath("$.components.schemas.Category.properties.color.pattern")
+            .isEqualTo("^#[0-9a-f]{6}$")
+            .jsonPath("$.components.schemas.CategoryTotal.required")
+            .value<List<String>> { assertThat(it).contains("color") }
             .jsonPath("$.components.responses.InUse.content['application/problem+json'].examples.inUse")
             .exists()
             .jsonPath("$.components.responses.SpendingValidationFailed.content['application/problem+json'].examples")

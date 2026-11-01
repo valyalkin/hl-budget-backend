@@ -3,6 +3,7 @@ package com.valyalkin.hlbudget.controller
 import com.valyalkin.hlbudget.support.AbstractIntegrationTest
 import com.valyalkin.hlbudget.support.TestClockConfig
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
@@ -54,6 +55,13 @@ class SpendingImportsIT : AbstractIntegrationTest() {
 
     private fun rows(table: String) = count("SELECT count(*) FROM $table")
 
+    /** Feature 007: an import only uses existing accounts, so Alice has the two the rows name. */
+    @BeforeEach
+    fun accounts() {
+        createAccount(alice, "Visa")
+        createAccount(alice, "Amex")
+    }
+
     private fun pointers(response: RestTestClient.ResponseSpec): List<String> {
         var pointers = emptyList<String>()
         response
@@ -90,7 +98,7 @@ class SpendingImportsIT : AbstractIntegrationTest() {
 
         assertThat(location).matches("/api/v1/spending-imports/[0-9a-f-]{36}")
         assertThat(rows("spendings")).isEqualTo(2)
-        // "car" reuses the default Car; Visa and Amex are new, once each.
+        // "car" reuses the default Car; Visa and Amex are Alice's existing accounts.
         assertThat(count("SELECT count(*) FROM categories WHERE lower(name) = 'car'")).isEqualTo(1)
         assertThat(count("SELECT count(*) FROM categories")).isEqualTo(17)
         assertThat(count("SELECT count(*) FROM accounts")).isEqualTo(2)
@@ -158,9 +166,9 @@ class SpendingImportsIT : AbstractIntegrationTest() {
             pointers(
                 post(
                     body(
-                        row(category = "Brand New Category"),
+                        row(),
                         row(date = TestClockConfig.TOMORROW),
-                        row(amount = "0", account = "Brand New Account"),
+                        row(amount = "0"),
                     ),
                 ),
             )
@@ -168,7 +176,48 @@ class SpendingImportsIT : AbstractIntegrationTest() {
         assertThat(found).containsExactly("#/spendings/1/date", "#/spendings/2/amount/amount")
         assertThat(rows("spendings")).isZero()
         assertThat(rows("categories")).isEqualTo(categories)
-        assertThat(rows("accounts")).isZero()
+        assertThat(rows("accounts")).isEqualTo(2)
+        assertThat(rows("spending_imports")).isZero()
+    }
+
+    @Test
+    fun `unknown category and account names refuse the whole import, and nothing is created (feature 007)`() {
+        categoryIds(alice)
+        val categories = rows("categories")
+
+        post(
+            body(
+                row(),
+                row(),
+                row(category = "Groceriess"),
+                row(category = "  groceries ", account = "VISA"),
+                row(),
+                row(account = "Visa Gold"),
+            ),
+            key = "k-unknown",
+        ).expectStatus()
+            .isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.type")
+            .isEqualTo("urn:problem:hl-budget:unprocessable-entity")
+            .jsonPath("$.errors.length()")
+            .isEqualTo(2)
+            .jsonPath("$.errors[0].pointer")
+            .isEqualTo("#/spendings/2/categoryName")
+            .jsonPath("$.errors[0].field")
+            .isEqualTo("spendings[2].categoryName")
+            .jsonPath("$.errors[0].code")
+            .isEqualTo("NotFound")
+            .jsonPath("$.errors[0].message")
+            .isEqualTo("is not one of your categories")
+            .jsonPath("$.errors[1].pointer")
+            .isEqualTo("#/spendings/5/accountName")
+            .jsonPath("$.errors[1].message")
+            .isEqualTo("is not one of your accounts")
+
+        assertThat(rows("spendings")).isZero()
+        assertThat(rows("categories")).isEqualTo(categories)
+        assertThat(rows("accounts")).isEqualTo(2)
         assertThat(rows("spending_imports")).isZero()
     }
 

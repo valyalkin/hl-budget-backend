@@ -10,19 +10,26 @@ data class CategoryRow(
     val name: String,
     val isDefault: Boolean,
     val spendingCount: Long,
+    val color: String,
 )
+
+/** How many of a user's categories use one colour. */
+interface ColorCount {
+    val color: String
+    val count: Long
+}
 
 interface CategoryRepository : JpaRepository<CategoryEntity, UUID> {
     @Query(
         "SELECT new com.valyalkin.hlbudget.repository.category.CategoryRow(c.id, c.name, c.isDefault, " +
-            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = c.userId AND s.categoryId = c.id)) " +
+            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = c.userId AND s.categoryId = c.id), c.color) " +
             "FROM CategoryEntity c WHERE c.userId = :userId ORDER BY lower(c.name), c.id",
     )
     fun findAllWithCounts(userId: UUID): List<CategoryRow>
 
     @Query(
         "SELECT new com.valyalkin.hlbudget.repository.category.CategoryRow(c.id, c.name, c.isDefault, " +
-            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = c.userId AND s.categoryId = c.id)) " +
+            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = c.userId AND s.categoryId = c.id), c.color) " +
             "FROM CategoryEntity c WHERE c.userId = :userId AND c.id = :id",
     )
     fun findWithCount(
@@ -36,6 +43,18 @@ interface CategoryRepository : JpaRepository<CategoryEntity, UUID> {
     ): CategoryEntity?
 
     fun findAllByUserId(userId: UUID): List<CategoryEntity>
+
+    /** Feature 007, research R-008: a name given with a spending must match an existing item. */
+    fun findByUserIdAndNameIgnoreCase(
+        userId: UUID,
+        name: String,
+    ): CategoryEntity?
+
+    /** Feature 007, research R-004: what a new category's colour is chosen from. */
+    @Query(
+        "SELECT c.color AS color, count(c) AS count FROM CategoryEntity c WHERE c.userId = :userId GROUP BY c.color",
+    )
+    fun colorCounts(userId: UUID): List<ColorCount>
 
     fun existsByUserIdAndNameIgnoreCase(
         userId: UUID,

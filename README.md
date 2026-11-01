@@ -86,18 +86,27 @@ so a controller change ships as: code + regenerated `contracts/api.yaml` here, t
 - **Merchants** are derived from spendings, not stored: spellings equal ignoring case and spaces
   count as one merchant. `limit` is 1–1000 (default 500); `truncated` says whether more exist.
 - **By name**: a spending may give `categoryName`/`accountName` instead of the id (exactly one of
-  each pair). A name reuses the caller's item ignoring case or creates it in the same transaction;
-  a refused spending creates nothing.
+  each pair). A name must match one of the caller's items ignoring case and surrounding spaces;
+  otherwise it is a 422 `NotFound` at that field. Since feature 007 nothing is created this way:
+  categories and accounts are created only through their own endpoints (Settings).
 - **The last account cannot be deleted** (422 `details.reason = last-account`), checked after
   in use (409).
+
+## Category colours (feature 007)
+
+- Every category has a `color` (`#rrggbb`) in `Category` and `CategoryTotal` responses. The 17
+  defaults have fixed colours, the same for every user; a new custom category gets the palette
+  colour its owner uses least (spare colours first) and keeps it after a rename. The palette is
+  `model/CategoryPalette.kt`; migration V5 adds the column and back-fills existing categories.
 
 ## CSV import (feature 004)
 
 - **`POST /api/v1/spending-imports`** creates 1–1000 spendings in one transaction. Categories and
-  accounts are given by name (`categoryName`, `accountName`); each distinct name, ignoring case
-  and surrounding spaces, is found or created once. Rows may be in any month.
+  accounts are given by name (`categoryName`, `accountName`) and must match the caller's items,
+  ignoring case and surrounding spaces; an unknown name is a 422 `NotFound` at that row (feature
+  007). Rows may be in any month.
 - **All or nothing**: every invalid field of every row is reported in one 422, its pointer naming
-  the row (`#/spendings/3/date`), and nothing is created, not even new names.
+  the row (`#/spendings/3/date`), and nothing is created.
 - **Idempotency**: with an `Idempotency-Key`, repeating the same rows returns the first import
   (200, `Idempotent-Replayed: true`); the same key with other rows is 422
   `details.reason = idempotency-key-reused`.

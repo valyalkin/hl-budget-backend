@@ -2,6 +2,7 @@ package com.valyalkin.hlbudget.service
 
 import com.valyalkin.hlbudget.error.UnprocessableEntityException
 import com.valyalkin.hlbudget.model.Category
+import com.valyalkin.hlbudget.model.CategoryPalette
 import com.valyalkin.hlbudget.model.NameCommand
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.category.CategoryEntity
@@ -52,10 +53,20 @@ class CategoryService(
         val saved =
             saveOrDuplicate(RESOURCE, command.name) {
                 categories.saveAndFlush(
-                    CategoryEntity(userId = userId, name = command.name, createdAt = now, updatedAt = now),
+                    CategoryEntity(
+                        userId = userId,
+                        name = command.name,
+                        // The least-used palette colour among the caller's categories (feature 007, R-004).
+                        color =
+                            CategoryPalette.next(
+                                categories.colorCounts(userId).associate { it.color to it.count.toInt() },
+                            ),
+                        createdAt = now,
+                        updatedAt = now,
+                    ),
                 )
             }
-        return Category(saved.id, saved.name, isDefault = false, spendingCount = 0)
+        return Category(saved.id, saved.name, isDefault = false, spendingCount = 0, color = saved.color)
     }
 
     fun rename(

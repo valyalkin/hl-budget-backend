@@ -8,4 +8,6 @@ data class Category(
     val name: String,
     val isDefault: Boolean,
     val spendingCount: Long,
+    /** `#rrggbb`, fixed for the defaults and assigned once to a custom category (feature 007). */
+    val color: String,
 )

@@ -158,15 +158,25 @@ class OwnershipIT : AbstractIntegrationTest() {
 
         getJson(bob, "/api/v1/spending-imports/$alicesImport").expectStatus().isNotFound()
 
-        // Bob's "amex" is his own new account, and Alice's key means nothing to him.
-        importAs(bob, "shared-key", "amex")
-        assertThat(
-            count(
-                "SELECT count(*) FROM accounts WHERE lower(name) = 'amex' AND user_id = " +
-                    "(SELECT id FROM users WHERE auth0_subject = ?)",
-                BOB,
-            ),
-        ).isEqualTo(1)
+        // Alice's "Amex" is not Bob's (feature 007: nothing is created by an import).
+        client
+            .post()
+            .uri("/api/v1/spending-imports")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer $bob")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(importJson("amex"))
+            .exchange()
+            .expectStatus()
+            .isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.errors[0].pointer")
+            .isEqualTo("#/spendings/0/accountName")
+
+        // With his own "amex", Alice's key means nothing to him.
+        val bobsAmex = createAccount(bob, "amex")
+        importAs(bob, "shared-key", "AMEX")
+        assertThat(count("SELECT count(*) FROM spendings WHERE account_id = ?::uuid", account)).isEqualTo(2)
+        assertThat(count("SELECT count(*) FROM spendings WHERE account_id = ?::uuid", bobsAmex)).isEqualTo(1)
         assertThat(count("SELECT count(*) FROM accounts WHERE lower(name) = 'amex'")).isEqualTo(2)
         assertThat(count("SELECT count(*) FROM spending_imports")).isEqualTo(2)
     }

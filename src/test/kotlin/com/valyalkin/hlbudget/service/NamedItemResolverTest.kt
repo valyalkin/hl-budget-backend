@@ -2,37 +2,32 @@ package com.valyalkin.hlbudget.service
 
 import com.valyalkin.hlbudget.error.FieldViolation
 import com.valyalkin.hlbudget.error.ValidationException
+import com.valyalkin.hlbudget.model.ImportRowCommand
 import com.valyalkin.hlbudget.model.Ref
 import com.valyalkin.hlbudget.model.SpendingCommand
-import com.valyalkin.hlbudget.repository.NamedItemInserts
-import com.valyalkin.hlbudget.repository.NamedItemRow
 import com.valyalkin.hlbudget.repository.account.AccountEntity
 import com.valyalkin.hlbudget.repository.account.AccountRepository
 import com.valyalkin.hlbudget.repository.category.CategoryEntity
 import com.valyalkin.hlbudget.repository.category.CategoryRepository
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
 import java.math.BigDecimal
-import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 import java.util.UUID
 
-/** Feature 003, research R-004: a spending's category and account by id or by name. */
+/** Feature 003, research R-004, and feature 007, R-008: a spending's category and account by id or by name. */
 class NamedItemResolverTest {
     private val now = Instant.parse("2026-10-27T15:00:00Z")
     private val categories = mockk<CategoryRepository>()
     private val accounts = mockk<AccountRepository>()
-    private val inserts = mockk<NamedItemInserts>()
-    private val resolver = NamedItemResolver(categories, accounts, inserts, Clock.fixed(now, ZoneOffset.UTC))
+    private val resolver = NamedItemResolver(categories, accounts)
 
     private val userId = UUID.randomUUID()
-    private val groceries = CategoryEntity(UUID.randomUUID(), userId, "Groceries", true, now, now, 0)
+    private val groceries = CategoryEntity(UUID.randomUUID(), userId, "Groceries", true, "#c2410c", now, now, 0)
     private val amex = AccountEntity(UUID.randomUUID(), userId, "Amex", now, now, 0)
 
     private fun command(
@@ -68,21 +63,55 @@ class NamedItemResolverTest {
 
         assertThat(category).isEqualTo(Ref(groceries.id, "Groceries"))
         assertThat(account).isEqualTo(Ref(amex.id, "Amex"))
-        verify(exactly = 0) { inserts.findOrCreateCategory(any(), any(), any()) }
     }
 
     @Test
-    fun `a name is trimmed and reused or created through the find-or-create insert`() {
-        val coffee = NamedItemRow(UUID.randomUUID(), "Coffee")
-        val visa = NamedItemRow(UUID.randomUUID(), "Visa")
-        every { inserts.findOrCreateCategory(userId, "coffee", now) } returns coffee
-        every { inserts.findOrCreateAccount(userId, "Visa", now) } returns visa
+    fun `a name is trimmed and matched against the caller's items`() {
+        every { categories.findByUserIdAndNameIgnoreCase(userId, "groceries") } returns groceries
+        every { accounts.findByUserIdAndNameIgnoreCase(userId, "AMEX") } returns amex
 
         val (category, account) =
-            resolver.resolve(userId, command(categoryName = " coffee ", accountName = "Visa"), emptyList())
+            resolver.resolve(userId, command(categoryName = " groceries ", accountName = "AMEX"), emptyList())
 
-        assertThat(category).isEqualTo(Ref(coffee.id, "Coffee"))
-        assertThat(account).isEqualTo(Ref(visa.id, "Visa"))
+        assertThat(category).isEqualTo(Ref(groceries.id, "Groceries"))
+        assertThat(account).isEqualTo(Ref(amex.id, "Amex"))
+    }
+
+    @Test
+    fun `an unknown name is NotFound at the name, for each`() {
+        every { categories.findByUserIdAndNameIgnoreCase(userId, any()) } returns null
+        every { accounts.findByUserIdAndNameIgnoreCase(userId, any()) } returns null
+
+        var messages = emptyList<String>()
+        assertThatThrownBy {
+            resolver.resolve(userId, command(categoryName = "Coffee", accountName = "Visa"), emptyList())
+        }.isInstanceOfSatisfying(ValidationException::class.java) { exception ->
+            messages = exception.violations.map { "${it.pointer} ${it.code} ${it.message}" }
+        }
+        assertThat(messages).containsExactly(
+            "#/categoryName NotFound is not one of your categories",
+            "#/accountName NotFound is not one of your accounts",
+        )
+    }
+
+    @Test
+    fun `an import row's unknown names are reported at the row's pointers`() {
+        every { categories.findAllByUserId(userId) } returns listOf(groceries)
+        every { accounts.findAllByUserId(userId) } returns listOf(amex)
+        val maps = resolver.names(userId)
+
+        fun row(
+            category: String,
+            account: String,
+        ) = ImportRowCommand(LocalDate.parse("2026-10-20"), "M", BigDecimal.ONE, "CAD", category, account)
+
+        assertThat(maps.violations(row(" GROCERIES", "amex "), 0)).isEmpty()
+        assertThat(maps.violations(row("Coffee", "Visa"), 3).map { it.pointer }).containsExactly(
+            "#/spendings/3/categoryName",
+            "#/spendings/3/accountName",
+        )
+        assertThat(maps.category("groceries")).isEqualTo(Ref(groceries.id, "Groceries"))
+        assertThat(maps.account("AMEX")).isEqualTo(Ref(amex.id, "Amex"))
     }
 
     @Test
@@ -90,6 +119,7 @@ class NamedItemResolverTest {
         assertThat(pointersOf { resolver.resolve(userId, command(), emptyList()) })
             .containsExactly("#/categoryId ExactlyOne", "#/accountId ExactlyOne")
         every { categories.findByIdAndUserId(groceries.id, userId) } returns groceries
+        every { accounts.findByUserIdAndNameIgnoreCase(userId, "Visa") } returns amex
         assertThat(
             pointersOf {
                 resolver.resolve(
@@ -124,16 +154,15 @@ class NamedItemResolverTest {
     }
 
     @Test
-    fun `nothing is created when any other field is invalid, and every problem is reported`() {
+    fun `every problem is reported together with earlier ones`() {
         every { accounts.findByIdAndUserId(any(), userId) } returns null
+        every { categories.findByUserIdAndNameIgnoreCase(userId, "Coffee") } returns null
         val earlier = listOf(FieldViolation("#/date", "date", "NotFuture", "must be today or earlier"))
 
         assertThat(
             pointersOf {
                 resolver.resolve(userId, command(categoryName = "Coffee", accountId = UUID.randomUUID()), earlier)
             },
-        ).containsExactly("#/date NotFuture", "#/accountId NotFound")
-        verify(exactly = 0) { inserts.findOrCreateCategory(any(), any(), any()) }
-        verify(exactly = 0) { inserts.findOrCreateAccount(any(), any(), any()) }
+        ).containsExactly("#/date NotFuture", "#/categoryName NotFound", "#/accountId NotFound")
     }
 }

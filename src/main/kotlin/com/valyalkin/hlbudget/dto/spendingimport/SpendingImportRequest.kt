@@ -49,7 +49,8 @@ data class SpendingImportRowRequest(
     @field:Size(max = MAX_NAME, message = "must be at most 50 characters")
     @field:Schema(
         description =
-            "Matched against the caller's categories ignoring case and surrounding spaces; created when none matches",
+            "Matched against the caller's categories ignoring case and surrounding spaces. Refused (422, " +
+                "NotFound) when none matches; never creates a category",
         example = "Groceries",
         minLength = 1,
         maxLength = MAX_NAME,
@@ -60,7 +61,8 @@ data class SpendingImportRowRequest(
     @field:Size(max = MAX_NAME, message = "must be at most 50 characters")
     @field:Schema(
         description =
-            "Matched against the caller's accounts ignoring case and surrounding spaces; created when none matches",
+            "Matched against the caller's accounts ignoring case and surrounding spaces. Refused (422, " +
+                "NotFound) when none matches; never creates an account",
         example = "Visa",
         minLength = 1,
         maxLength = MAX_NAME,

@@ -16,7 +16,7 @@ import java.util.UUID
 class CurrentUserServiceTest {
     private val users = mockk<CurrentUserRepository>(relaxed = true)
     private val service = CurrentUserService(users)
-    private val names = DefaultCategories.NAMES
+    private val names = DefaultCategories.ALL
     private val identity = VerifiedIdentity("auth0|alice", "Alice", "alice@example.com", null)
     private val id = UUID.randomUUID()
 
