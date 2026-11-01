@@ -1046,6 +1046,7 @@ paths:
                         amount: "2150.00"
                         currency: CAD
                       spendingCount: 1
+                      color: "#1e5b45"
                     - category:
                         id: 2c8e4f6a-1b3d-4e5f-9a7b-8c0d1e2f3a55
                         name: Groceries
@@ -1053,6 +1054,76 @@ paths:
                         amount: "176.44"
                         currency: CAD
                       spendingCount: 2
+                      color: "#c2410c"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/v1/account-totals:
+    get:
+      tags:
+      - Totals
+      summary: The caller's spending per account over a date range
+      description: "One entry per account with at least one spending in the range,\
+        \ and only those; largest total first, ties by account name. Not paged: bounded\
+        \ by the caller's account count."
+      operationId: listAccountTotals
+      parameters:
+      - name: from
+        in: query
+        description: "Earliest date, inclusive"
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-10-01
+      - name: to
+        in: query
+        description: "Latest date, inclusive; not before `from`, at most 366 days\
+          \ after it"
+        required: true
+        schema:
+          type: string
+          format: date
+        example: 2026-10-31
+      responses:
+        "200":
+          description: Totals per account; `items` is empty when nothing was spent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountTotals"
+              examples:
+                october:
+                  description: october
+                  value:
+                    from: 2026-10-01
+                    to: 2026-10-31
+                    total:
+                      amount: "2326.44"
+                      currency: CAD
+                    spendingCount: 3
+                    items:
+                    - account:
+                        id: 3f1c5a8e-2b7d-4e0a-9c61-0d2f4b8a7e11
+                        name: Debit card
+                      total:
+                        amount: "2150.00"
+                        currency: CAD
+                      spendingCount: 1
+                      color: "#e11d48"
+                    - account:
+                        id: 7a2d9e41-5c3b-4f8a-b1e6-2d4c8f0a9b33
+                        name: Amex
+                      total:
+                        amount: "176.44"
+                        currency: CAD
+                      spendingCount: 2
+                      color: "#0891b2"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "422":
@@ -1383,7 +1454,16 @@ components:
           description: How many of the caller's spendings use this account
           minimum: 0
           readOnly: true
+        color:
+          type: string
+          description: "The account's colour, assigned when it is created and kept\
+            \ for its lifetime (including renames). Drawn in the By account table\
+            \ and donut"
+          example: "#e11d48"
+          pattern: "^#[0-9a-f]{6}$"
+          readOnly: true
       required:
+      - color
       - id
       - name
       - spendingCount
@@ -1685,6 +1765,59 @@ components:
             $ref: "#/components/schemas/Account"
       required:
       - items
+    AccountTotal:
+      type: object
+      description: One account's spending in the range
+      properties:
+        account:
+          $ref: "#/components/schemas/Ref"
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        spendingCount:
+          type: integer
+          format: int64
+          example: 2
+          minimum: 1
+        color:
+          type: string
+          description: "The account's colour, the same as Account.color"
+          example: "#e11d48"
+          pattern: "^#[0-9a-f]{6}$"
+      required:
+      - account
+      - color
+      - spendingCount
+      - total
+    AccountTotals:
+      type: object
+      description: "Spending per account over a date range: only accounts with spending,\
+        \ largest first"
+      properties:
+        from:
+          type: string
+          format: date
+          example: 2026-10-01
+        to:
+          type: string
+          format: date
+          example: 2026-10-31
+        total:
+          $ref: "#/components/schemas/MoneyTotal"
+        spendingCount:
+          type: integer
+          format: int64
+          example: 14
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountTotal"
+      required:
+      - from
+      - items
+      - spendingCount
+      - to
+      - total
   responses:
     Unauthenticated:
       description: "Missing, malformed, expired, wrongly signed, wrong-issuer or wrong-audience\

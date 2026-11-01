@@ -3,6 +3,7 @@ package com.valyalkin.hlbudget.service
 import com.valyalkin.hlbudget.config.HlBudgetProperties
 import com.valyalkin.hlbudget.error.ValidationException
 import com.valyalkin.hlbudget.model.VerifiedIdentity
+import com.valyalkin.hlbudget.repository.spending.AccountTotalRow
 import com.valyalkin.hlbudget.repository.spending.CategoryTotalRow
 import com.valyalkin.hlbudget.repository.spending.MonthTotalRow
 import com.valyalkin.hlbudget.repository.spending.TotalsQueries
@@ -21,7 +22,7 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 import java.util.UUID
 
-/** Feature 003, research R-002: totals by month and by category. */
+/** Feature 003, research R-002: totals by month and by category; feature 008: by account. */
 class TotalsServiceTest {
     // 03:00 UTC on 1 November is still 31 October in Toronto.
     private val clock = Clock.fixed(Instant.parse("2026-11-01T03:00:00Z"), ZoneOffset.UTC)
@@ -113,6 +114,56 @@ class TotalsServiceTest {
         }
         assertThatThrownBy {
             service.byCategory(identity, LocalDate.parse("2025-01-01"), LocalDate.parse("2026-01-03"))
+        }.isInstanceOfSatisfying(ValidationException::class.java) {
+            assertThat(it.violations.single().pointer).isEqualTo("#/to")
+        }
+    }
+
+    @Test
+    fun `account totals add up to the range total and carry each account's colour (feature 008)`() {
+        val from = LocalDate.parse("2026-10-01")
+        val to = LocalDate.parse("2026-10-31")
+        val debit = UUID.randomUUID()
+        every { queries.byAccount(userId, from, to) } returns
+            listOf(
+                AccountTotalRow(debit, "Debit card", "#0891b2", BigDecimal("2150.00"), 1),
+                AccountTotalRow(UUID.randomUUID(), "Amex", "#e11d48", BigDecimal("176.44"), 2),
+            )
+
+        val totals = service.byAccount(identity, from, to)
+
+        assertThat(totals.from).isEqualTo(from)
+        assertThat(totals.to).isEqualTo(to)
+        assertThat(totals.items.map { it.account.name }).containsExactly("Debit card", "Amex")
+        assertThat(
+            totals.items
+                .first()
+                .account.id,
+        ).isEqualTo(debit)
+        assertThat(totals.items.map { it.color }).containsExactly("#0891b2", "#e11d48")
+        assertThat(totals.items.map { it.total.currency.currencyCode }).containsOnly("CAD")
+        assertThat(totals.total.amount).isEqualByComparingTo("2326.44")
+        assertThat(totals.total.currency.currencyCode).isEqualTo("CAD")
+        assertThat(totals.spendingCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `account totals for nothing spent are zero, and a bad range is invalid (feature 008)`() {
+        val day = LocalDate.parse("2026-02-01")
+        every { queries.byAccount(userId, day, day) } returns emptyList()
+
+        val totals = service.byAccount(identity, day, day)
+
+        assertThat(totals.items).isEmpty()
+        assertThat(totals.total.amount).isEqualByComparingTo("0")
+        assertThat(totals.spendingCount).isZero()
+        assertThatThrownBy {
+            service.byAccount(identity, LocalDate.parse("2026-11-01"), LocalDate.parse("2026-10-01"))
+        }.isInstanceOfSatisfying(ValidationException::class.java) {
+            assertThat(it.violations.single().pointer).isEqualTo("#/from")
+        }
+        assertThatThrownBy {
+            service.byAccount(identity, LocalDate.parse("2025-01-01"), LocalDate.parse("2026-01-03"))
         }.isInstanceOfSatisfying(ValidationException::class.java) {
             assertThat(it.violations.single().pointer).isEqualTo("#/to")
         }

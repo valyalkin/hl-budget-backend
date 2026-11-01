@@ -13,7 +13,7 @@ data class CategoryRow(
     val color: String,
 )
 
-/** How many of a user's categories use one colour. */
+/** How many of a user's categories, or of their accounts, use one colour. */
 interface ColorCount {
     val color: String
     val count: Long

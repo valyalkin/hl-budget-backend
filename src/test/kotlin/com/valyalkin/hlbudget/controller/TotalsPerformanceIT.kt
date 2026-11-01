@@ -10,7 +10,7 @@ import java.util.UUID
 
 /**
  * Feature 003, SC-005: each read the Spendings screen makes answers in well under the 1-second
- * budget for a user with 10,000 spendings.
+ * budget for a user with 10,000 spendings (feature 008 adds account totals).
  */
 class TotalsPerformanceIT : AbstractIntegrationTest() {
     private fun median(uri: String): Duration {
@@ -25,7 +25,7 @@ class TotalsPerformanceIT : AbstractIntegrationTest() {
     }
 
     @Test
-    fun `the four reads of the Spendings screen are fast over 10,000 spendings`() {
+    fun `the reads of the Spendings screen are fast over 10,000 spendings`() {
         val categories = categoryIds(alice).values.take(15)
         val accounts = listOf("Amex", "Visa", "Cash").map { createAccount(alice, it) }
         val userId =
@@ -49,6 +49,7 @@ class TotalsPerformanceIT : AbstractIntegrationTest() {
         listOf(
             "/api/v1/monthly-totals?year=2026",
             "/api/v1/category-totals?from=2026-10-01&to=2026-10-31",
+            "/api/v1/account-totals?from=2026-10-01&to=2026-10-31",
             "/api/v1/merchants",
             "/api/v1/spendings?from=2026-10-01&to=2026-10-31&size=100&sort=date,desc",
         ).forEach { uri ->

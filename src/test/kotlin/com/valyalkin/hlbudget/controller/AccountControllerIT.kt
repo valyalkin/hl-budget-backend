@@ -147,4 +147,71 @@ class AccountControllerIT : AbstractIntegrationTest() {
             .isUnauthorized()
         getJson(alice, "$base/not-a-uuid").expectStatus().isBadRequest()
     }
+
+    private fun color(
+        token: String,
+        id: String,
+    ): String {
+        var color = ""
+        getJson(token, "$base/$id")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.color")
+            .value<String> { color = it }
+        return color
+    }
+
+    private fun createdColor(
+        token: String,
+        name: String,
+    ): String {
+        var color = ""
+        sendJson(token, "POST", base, """{"name":"$name"}""")
+            .expectStatus()
+            .isCreated()
+            .expectBody()
+            .jsonPath("$.color")
+            .value<String> { color = it }
+        return color
+    }
+
+    @Test
+    fun `each new account gets the next free colour, kept on rename (feature 008)`() {
+        assertThat(listOf("Amex", "Debit card", "Cash").map { createdColor(alice, it) })
+            .containsExactly("#e11d48", "#0891b2", "#a855f7")
+        var colors = emptyList<String>()
+        getJson(alice, base)
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.items[*].color")
+            .value<List<String>> { colors = it }
+        // Sorted by name: Amex, Cash, Debit card.
+        assertThat(colors).containsExactly("#e11d48", "#a855f7", "#0891b2")
+
+        var amexId = ""
+        getJson(alice, base)
+            .expectBody()
+            .jsonPath("$.items[0].id")
+            .value<String> { amexId = it }
+        sendJson(alice, "PUT", "$base/$amexId", """{"name":"Amex Gold"}""")
+            .expectStatus()
+            .isOk()
+            .expectBody()
+            .jsonPath("$.color")
+            .isEqualTo("#e11d48")
+        assertThat(color(alice, amexId)).isEqualTo("#e11d48")
+    }
+
+    @Test
+    fun `a deleted account's colour is free again, and colours are per user (feature 008)`() {
+        createAccount(alice, "Amex")
+        createAccount(alice, "Debit card")
+        val cash = createAccount(alice, "Cash")
+        delete(alice, "$base/$cash").expectStatus().isNoContent()
+
+        assertThat(createdColor(alice, "Savings")).isEqualTo("#a855f7")
+        assertThat(createdColor(bob, "Bob card")).isEqualTo("#e11d48")
+    }
 }

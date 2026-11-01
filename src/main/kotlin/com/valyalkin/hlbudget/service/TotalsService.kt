@@ -2,6 +2,8 @@ package com.valyalkin.hlbudget.service
 
 import com.valyalkin.hlbudget.error.FieldViolation
 import com.valyalkin.hlbudget.error.ValidationException
+import com.valyalkin.hlbudget.model.AccountTotal
+import com.valyalkin.hlbudget.model.AccountTotals
 import com.valyalkin.hlbudget.model.CategoryTotal
 import com.valyalkin.hlbudget.model.CategoryTotals
 import com.valyalkin.hlbudget.model.Money
@@ -19,8 +21,9 @@ import java.time.YearMonth
 import java.time.temporal.ChronoUnit
 
 /**
- * Sums of the caller's spendings, for the month line and the By category card (feature 003,
- * research R-002). Sums are exact; nothing here is a floating-point number.
+ * Sums of the caller's spendings, for the month line, the By category card (feature 003,
+ * research R-002) and the By account card (feature 008, research R-004). Sums are exact; nothing
+ * here is a floating-point number.
  *
  * Read-write transactions because resolving the caller may create their user row on a first call.
  */
@@ -71,6 +74,27 @@ class TotalsService(
                 CategoryTotal(Ref(it.categoryId, it.categoryName), money(it.total), it.spendingCount, it.categoryColor)
             }
         return CategoryTotals(
+            from = from,
+            to = to,
+            total = money(items.fold(BigDecimal.ZERO) { sum, item -> sum + item.total.amount }),
+            spendingCount = items.sumOf { it.spendingCount },
+            items = items,
+        )
+    }
+
+    /** Spending per account over [from]..[to]; the same range rules as [byCategory]. */
+    fun byAccount(
+        identity: VerifiedIdentity,
+        from: LocalDate,
+        to: LocalDate,
+    ): AccountTotals {
+        checkRange(from, to)
+        val userId = currentUser.resolve(identity)
+        val items =
+            queries.byAccount(userId, from, to).map {
+                AccountTotal(Ref(it.accountId, it.accountName), money(it.total), it.spendingCount, it.accountColor)
+            }
+        return AccountTotals(
             from = from,
             to = to,
             total = money(items.fold(BigDecimal.ZERO) { sum, item -> sum + item.total.amount }),

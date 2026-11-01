@@ -1,5 +1,6 @@
 package com.valyalkin.hlbudget.repository.account
 
+import com.valyalkin.hlbudget.repository.category.ColorCount
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import java.util.UUID
@@ -9,19 +10,20 @@ data class AccountRow(
     val id: UUID,
     val name: String,
     val spendingCount: Long,
+    val color: String,
 )
 
 interface AccountRepository : JpaRepository<AccountEntity, UUID> {
     @Query(
         "SELECT new com.valyalkin.hlbudget.repository.account.AccountRow(a.id, a.name, " +
-            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = a.userId AND s.accountId = a.id)) " +
+            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = a.userId AND s.accountId = a.id), a.color) " +
             "FROM AccountEntity a WHERE a.userId = :userId ORDER BY lower(a.name), a.id",
     )
     fun findAllWithCounts(userId: UUID): List<AccountRow>
 
     @Query(
         "SELECT new com.valyalkin.hlbudget.repository.account.AccountRow(a.id, a.name, " +
-            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = a.userId AND s.accountId = a.id)) " +
+            "(SELECT count(s) FROM SpendingEntity s WHERE s.userId = a.userId AND s.accountId = a.id), a.color) " +
             "FROM AccountEntity a WHERE a.userId = :userId AND a.id = :id",
     )
     fun findWithCount(
@@ -35,6 +37,12 @@ interface AccountRepository : JpaRepository<AccountEntity, UUID> {
     ): AccountEntity?
 
     fun findAllByUserId(userId: UUID): List<AccountEntity>
+
+    /** How many of the caller's accounts use each colour (feature 008, research R-002). */
+    @Query(
+        "SELECT a.color AS color, count(a) AS count FROM AccountEntity a WHERE a.userId = :userId GROUP BY a.color",
+    )
+    fun colorCounts(userId: UUID): List<ColorCount>
 
     /** Feature 007, research R-008: a name given with a spending must match an existing item. */
     fun findByUserIdAndNameIgnoreCase(

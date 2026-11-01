@@ -1,6 +1,7 @@
 package com.valyalkin.hlbudget.service
 
 import com.valyalkin.hlbudget.model.Account
+import com.valyalkin.hlbudget.model.CategoryPalette
 import com.valyalkin.hlbudget.model.NameCommand
 import com.valyalkin.hlbudget.model.VerifiedIdentity
 import com.valyalkin.hlbudget.repository.account.AccountEntity
@@ -47,10 +48,20 @@ class AccountService(
         val saved =
             saveOrDuplicate(RESOURCE, command.name) {
                 accounts.saveAndFlush(
-                    AccountEntity(userId = userId, name = command.name, createdAt = now, updatedAt = now),
+                    AccountEntity(
+                        userId = userId,
+                        name = command.name,
+                        createdAt = now,
+                        updatedAt = now,
+                        // The least-used palette colour among the caller's accounts (feature 008, R-002).
+                        color =
+                            CategoryPalette.next(
+                                accounts.colorCounts(userId).associate { it.color to it.count.toInt() },
+                            ),
+                    ),
                 )
             }
-        return Account(saved.id, saved.name, spendingCount = 0)
+        return Account(saved.id, saved.name, spendingCount = 0, color = saved.color)
     }
 
     @Transactional
