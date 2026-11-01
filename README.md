@@ -37,6 +37,7 @@ message naming it. The local profile defaults the currency to `CAD` and the time
 | `http://localhost:8080/api/v1/spendings` | `GET` (paged, filtered, sorted), `POST`; `/{id}`: `GET`, `PUT`, `DELETE` |
 | `http://localhost:8080/api/v1/monthly-totals?year=2026` | `GET`: total and count for each of the 12 months, plus `today` |
 | `http://localhost:8080/api/v1/category-totals?from=…&to=…` | `GET`: total per category with spending in the range |
+| `http://localhost:8080/api/v1/account-totals?from=…&to=…` | `GET`: total per account with spending in the range (feature 008) |
 | `http://localhost:8080/api/v1/merchants` | `GET`: past merchants, most used first, with their latest category and account |
 | `http://localhost:8080/api/v1/spending-imports` | `POST`: 1–1000 spendings at once, all or nothing; `/{id}`: `GET` the import's receipt |
 | `http://localhost:8080/api/swagger-ui.html` | Swagger UI |
@@ -98,6 +99,15 @@ so a controller change ships as: code + regenerated `contracts/api.yaml` here, t
   defaults have fixed colours, the same for every user; a new custom category gets the palette
   colour its owner uses least (spare colours first) and keeps it after a rename. The palette is
   `model/CategoryPalette.kt`; migration V5 adds the column and back-fills existing categories.
+
+## Account colours and totals (feature 008)
+
+- Every account has a `color` (`#rrggbb`) in `Account` and `AccountTotal` responses, from the same
+  palette: a new account gets the colour least used among its owner's accounts (spare colours
+  first; categories are not counted) and keeps it after a rename. Migration V6 adds the column and
+  gives existing accounts theirs in creation order.
+- `account-totals` is the twin of `category-totals`: only accounts with spending in the range,
+  largest first, ties by name; same range rules (ordered, at most 366 days).
 
 ## CSV import (feature 004)
 
