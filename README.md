@@ -40,6 +40,13 @@ message naming it. The local profile defaults the currency to `CAD` and the time
 | `http://localhost:8080/api/v1/account-totals?from=…&to=…` | `GET`: total per account with spending in the range (feature 008) |
 | `http://localhost:8080/api/v1/merchants` | `GET`: past merchants, most used first, with their latest category and account |
 | `http://localhost:8080/api/v1/spending-imports` | `POST`: 1–1000 spendings at once, all or nothing; `/{id}`: `GET` the import's receipt |
+| `http://localhost:8080/api/v1/incomes` | `GET` (paged, filtered, sorted like spendings), `POST`; `/{id}`: `GET`, `PUT`, `DELETE` (feature 009) |
+| `http://localhost:8080/api/v1/income-categories` | `GET` (Salary and Investments plus the caller's own), `POST`; `/{id}`: `GET`, `PUT`, `DELETE` |
+| `http://localhost:8080/api/v1/income-sources` | `GET`: past income sources, most used first, with their latest category and account |
+| `http://localhost:8080/api/v1/monthly-income-totals?year=YYYY` | `GET`: income total and entry count for each month of the year |
+| `http://localhost:8080/api/v1/income-category-totals?from=…&to=…` | `GET`: income per income category in the range |
+| `http://localhost:8080/api/v1/income-account-totals?from=…&to=…` | `GET`: income per account in the range |
+| `http://localhost:8080/api/v1/income-imports` | `POST`: 1–1000 income entries at once, all or nothing; `/{id}`: `GET` the receipt |
 | `http://localhost:8080/api/swagger-ui.html` | Swagger UI |
 | `http://localhost:8080/api/v3/api-docs.yaml` | The OpenAPI document |
 
@@ -108,6 +115,24 @@ so a controller change ships as: code + regenerated `contracts/api.yaml` here, t
   gives existing accounts theirs in creation order.
 - `account-totals` is the twin of `category-totals`: only accounts with spending in the range,
   largest first, ties by name; same range rules (ordered, at most 366 days).
+
+## Income (feature 009)
+
+- Income has its own tables (migration V7): `income_categories`, `incomes`, `income_imports`, and
+  `users.income_categories_seeded_at`. An income references an **income** category and one of the
+  shared accounts through composite keys, so it can never use a spending category, and a
+  spending can never use an income category.
+- Every user gets **Salary** (`#1e5b45`) and **Investments** (`#1d4ed8`) once, on their first
+  budgeting call, including users from before this feature. They cannot be renamed or deleted.
+  A custom income category gets the palette colour least used among its owner's income
+  categories.
+- The income endpoints are twins of the spending ones: same validation, idempotent create, paging,
+  totals range rules and import rules. An income's party is `source` instead of `merchant`;
+  income totals count `entryCount`, income categories and sources `incomeCount`.
+- `Account` now also has `incomeCount`. Deleting an account that income uses is refused with the
+  existing `409 in-use`; `details` carry both `spendingCount` and `incomeCount`.
+- The totals and past-name SQL is shared through `model/Ledger.kt`; the date, amount and
+  fingerprint rules are in `service/EntryRules.kt` (formerly `SpendingRules`).
 
 ## CSV import (feature 004)
 
